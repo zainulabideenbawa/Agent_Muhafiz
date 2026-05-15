@@ -3,7 +3,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import { muhafizGraph } from './graph.js';
-import { initDb } from './db.js';
+import { initDb, createUser, findUserByNic } from './db.js';
 
 const app = express();
 app.use(cors());
@@ -11,6 +11,43 @@ app.use(express.json());
 
 // Initialize Neon DB
 initDb();
+
+// --- AUTH ENDPOINTS ---
+app.post('/api/auth/signup', async (req, res) => {
+    try {
+        const user = await createUser(req.body);
+        res.json({ success: true, user: user[0] });
+    } catch (error) {
+        res.status(400).json({ success: false, error: "NIC already exists" });
+    }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+    const { nic, password } = req.body;
+    const user = await findUserByNic(nic);
+    if (user && user.password === password) {
+        res.json({ success: true, user });
+    } else {
+        res.status(401).json({ success: false, error: "Invalid credentials" });
+    }
+});
+
+// --- GOV OFFERINGS & ALERTS ---
+app.get('/api/area/pulse/:sector', (req, res) => {
+    const { sector } = req.params;
+    // Mock localized data based on user sector
+    res.json({
+        sector,
+        alerts: [
+            { id: 1, type: "urgent", message: `Gov Alert: ${sector} Dengue Spray Drive starts at 9PM.` }
+        ],
+        vitals: {
+            water_timing: "4:00 PM - 8:00 PM",
+            road_status: "Clear (University Road)",
+            electricity: "Load Shedding: None scheduled"
+        }
+    });
+});
 
 
 const httpServer = createServer(app);
