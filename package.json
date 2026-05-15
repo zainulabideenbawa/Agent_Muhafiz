@@ -20,7 +20,9 @@
   },
   "homepage": "https://github.com/zainulabideenbawa/Agent_Muhafiz#readme",
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@langchain/core": "^1.1.46",
+    "@langchain/google-genai": "^2.1.30",
     "@langchain/langgraph": "^1.3.0",
     "@tailwindcss/postcss": "^4.3.0",
     "@vitejs/plugin-react": "^6.0.2",
