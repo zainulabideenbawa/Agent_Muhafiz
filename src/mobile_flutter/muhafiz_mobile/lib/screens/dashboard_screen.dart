@@ -1,11 +1,38 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'voice_report_screen.dart';
+
 import 'council_hub_screen.dart';
 import '../theme/theme.dart';
 
 
-class DashboardScreen extends StatelessWidget {
-  const DashboardScreen({super.key});
+class DashboardScreen extends StatefulWidget {
+  final Map<String, dynamic>? user;
+  const DashboardScreen({super.key, this.user});
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  Map<String, dynamic>? areaData;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchAreaData();
+  }
+
+  void _fetchAreaData() async {
+    final sector = widget.user?['sector'] ?? 'Gulshan';
+    final response = await http.get(Uri.parse('http://localhost:3001/api/area/pulse/$sector'));
+    if (response.statusCode == 200) {
+      setState(() {
+        areaData = jsonDecode(response.body);
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -16,10 +43,11 @@ class DashboardScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Header
-              const Padding(
-                padding: EdgeInsets.all(24.0),
-                child: _DashboardHeader(),
+              Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: _DashboardHeader(name: widget.user?['name'] ?? 'Citizen'),
               ),
+
 
               // Area Vitals
               const _SectionTitle(title: 'Area Vitals'),
@@ -38,19 +66,20 @@ class DashboardScreen extends StatelessWidget {
                     _VitalCard(
                       icon: '💧',
                       label: 'Water Timing',
-                      value: '4:00 PM',
-                      subtitle: 'Next Supply: Block 13',
+                      value: areaData?['vitals']?['water_timing'] ?? 'Loading...',
+                      subtitle: 'Next Supply: ${widget.user?['sector'] ?? 'Gulshan'}',
                     ),
                     _VitalCard(
                       icon: '🚧',
                       label: 'Road Status',
-                      value: 'Clear',
-                      subtitle: 'Sharea Faisal',
+                      value: areaData?['vitals']?['road_status'] ?? 'Scanning...',
+                      subtitle: 'Live Status',
                       statusColor: MuhafizTheme.emerald500,
                     ),
                   ],
                 ),
               ),
+
 
               // Voice Report Hub
               const SizedBox(height: 32),
@@ -150,7 +179,8 @@ class DashboardScreen extends StatelessWidget {
 }
 
 class _DashboardHeader extends StatelessWidget {
-  const _DashboardHeader();
+  final String name;
+  const _DashboardHeader({required this.name});
 
   @override
   Widget build(BuildContext context) {
@@ -176,7 +206,7 @@ class _DashboardHeader extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               const Text(
-                'Agent Sentinel: Actively Monitoring Gulshan',
+                'Agent Sentinel: Actively Monitoring Your Area',
                 style: TextStyle(
                   color: MuhafizTheme.emerald400,
                   fontSize: 10,
@@ -187,22 +217,23 @@ class _DashboardHeader extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
-        const Text(
-          'Area Pulse',
-          style: TextStyle(
+        Text(
+          'Salaam, $name',
+          style: const TextStyle(
             color: Colors.white,
             fontSize: 32,
             fontWeight: FontWeight.bold,
           ),
         ),
         const Text(
-          'Karachi, East Sector',
+          'Karachi Sector Insight',
           style: TextStyle(color: MuhafizTheme.darkTextMuted, fontSize: 16),
         ),
       ],
     );
   }
 }
+
 
 class _SectionTitle extends StatelessWidget {
   final String title;
