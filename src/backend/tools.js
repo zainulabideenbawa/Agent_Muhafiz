@@ -1,81 +1,80 @@
 /**
- * Core Tools & Tool-Calling Functions for Muhafiz-X Agents
+ * Core Tools for Muhafiz-X Agents
+ * These functions connect the Agents to the Backend REST APIs.
  */
 
+const BACKEND_URL = "http://localhost:3001";
+
 /**
- * Tool for The Truth-Engine: Verifies conditions at a specific location.
- * @param {string} location - Karachi specific location/landmark
- * @returns {object} Mock traffic and weather data
+ * Tool for The Truth-Engine: Connects to /tools/vitals
  */
 export const get_city_vitals = async (location) => {
-    console.log(`[Tool] get_city_vitals called for: ${location}`);
-    
-    // In a real app, this would hit Google Maps API & OpenWeather. 
-    // Here we provide mock data specific to Karachi crisis conditions.
-    const isFloodZone = location.toLowerCase().includes("nipa") || location.toLowerCase().includes("sharea faisal");
-    
-    return {
-        location: location,
-        timestamp: new Date().toISOString(),
-        traffic_speed_kmh: isFloodZone ? 8 : 45, // Heavy congestion if in flood zone
-        weather: {
-            condition: isFloodZone ? "Heavy Monsoon Rain" : "Clear",
-            rainfall_rate_mm: isFloodZone ? 25 : 0,
-            water_level_cm: isFloodZone ? 40 : 0
-        }
-    };
+    console.log(`[Agent Tool] Fetching vitals from API for: ${location}`);
+    try {
+        const response = await fetch(`${BACKEND_URL}/tools/vitals`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ location })
+        });
+        const data = await response.json();
+        
+        // Adapt API response to Agent's expected format
+        return {
+            location: location,
+            traffic_speed_kmh: data.traffic_speed,
+            weather: {
+                rainfall_rate_mm: data.rainfall,
+                water_level_cm: data.water_level
+            }
+        };
+    } catch (error) {
+        console.error("Tool Error (vitals):", error);
+        return { traffic_speed_kmh: 40, weather: { rainfall_rate_mm: 0, water_level_cm: 0 } };
+    }
 };
 
 /**
- * Tool for The Strategist: Fetches available emergency units.
- * @returns {object} Available resources from the "Mock Ledger"
+ * Tool for The Strategist: Connects to /tools/resources
  */
 export const get_resource_status = async () => {
-    console.log(`[Tool] get_resource_status called`);
-    
-    return {
-        timestamp: new Date().toISOString(),
-        available_resources: {
-            suction_trucks: [
-                { id: "ST-01", depot: "Gulshan-e-Iqbal", status: "idle", eta_mins: 15 },
-                { id: "ST-02", depot: "Saddar", status: "idle", eta_mins: 35 }
-            ],
-            ambulances: [
-                { id: "AMB-104", depot: "Chhipa NIPA", status: "idle", eta_mins: 5 },
-                { id: "AMB-211", depot: "Edhi Sohrab Goth", status: "idle", eta_mins: 12 }
-            ],
-            police_units: [
-                { id: "R-15", unit: "Traffic Police Zone East", status: "patrol", eta_mins: 8 }
-            ]
-        }
-    };
+    console.log(`[Agent Tool] Fetching resources from API`);
+    try {
+        const response = await fetch(`${BACKEND_URL}/tools/resources`);
+        const data = await response.json();
+        
+        // Transform API response to Agent's resource object
+        return {
+            available_resources: {
+                suction_trucks: Array(data.suction_trucks).fill(0).map((_, i) => ({ id: `ST-${i}`, status: "idle" })),
+                ambulances: Array(data.ambulances).fill(0).map((_, i) => ({ id: `AMB-${i}`, status: "idle" }))
+            }
+        };
+    } catch (error) {
+        console.error("Tool Error (resources):", error);
+        return { available_resources: { suction_trucks: [], ambulances: [] } };
+    }
 };
 
 /**
- * Tool for The Oracle: Simulates the outcome of a proposed Action Plan.
- * @param {object} action_plan - The Strategist's DRAFT plan
- * @returns {object} Simulation outcome with success probabilities
+ * Tool for The Oracle: Connects to /tools/simulate
  */
 export const run_impact_simulation = async (action_plan) => {
-    console.log(`[Tool] run_impact_simulation called with resources: ${action_plan?.assigned_resources?.join(", ")}`);
-    
-    // Mock simulation logic: If suction trucks are assigned, probability of success is high
-    const hasSuctionTrucks = action_plan?.assigned_resources?.some(r => r.includes("ST") || r.toLowerCase().includes("suction"));
-    
-    const probability = hasSuctionTrucks ? 0.88 : 0.45;
-    const timeSaved = hasSuctionTrucks ? "120 minutes" : "0 minutes";
-    const livesAtRiskDelta = hasSuctionTrucks ? -15 : -2; // Reduced risk by 15 lives
-
-    return {
-        simulation_run_id: `SIM-${Math.floor(Math.random() * 10000)}`,
-        success_probability: probability,
-        time_saved_metric: timeSaved,
-        lives_at_risk_delta: livesAtRiskDelta,
-        before_state_congestion: 85,
-        after_state_congestion: hasSuctionTrucks ? 45 : 80,
-        approved: probability > 0.75, // The Oracle only approves if > 75% success probability
-        simulation_log: hasSuctionTrucks 
-            ? "Simulation confirms suction trucks will clear NIPA underpass in 2 hours. Traffic flow restored by 45%. Plan Approved." 
-            : "Insufficient resources assigned to clear water. Congestion will persist. Plan Rejected."
-    };
+    console.log(`[Agent Tool] Running simulation via API`);
+    try {
+        const response = await fetch(`${BACKEND_URL}/tools/simulate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action_plan })
+        });
+        const data = await response.json();
+        
+        return {
+            success_probability: data.approved ? 0.9 : 0.3,
+            simulation_log: `Approved: ${data.approved}. Time Saved: ${data.time_saved_minutes} mins. Congestion: ${data.congestion_reduction_percent}%`,
+            approved: data.approved
+        };
+    } catch (error) {
+        console.error("Tool Error (simulate):", error);
+        return { success_probability: 0.5, approved: false, simulation_log: "Simulation API unreachable" };
+    }
 };
