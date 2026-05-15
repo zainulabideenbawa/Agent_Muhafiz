@@ -14,8 +14,21 @@ We have decided to **remove** the real-time AI image analysis block from the act
 3. **Privacy and Compliance:** Automated scanning of citizen-provided photos raises data sovereignty and privacy concerns. Keeping the images as raw attachments for manual human review is a more conservative and legally sound starting point for a public sector OS.
 
 ### Status
-**Superseded**: The system now utilizes a "Raw Evidence Gallery" that displays citizen and staff submissions with metadata tracking (source, timestamp) but avoids automated AI inference on the image content itself.
+**Superseded**: The system now utilizes a "Raw Evidence Gallery" for visuals, while text-based OSINT is processed via a live uplink.
 
-### Consequence
-- **Positive:** Dramatic reduction in monthly operational API costs.
-- **Negative:** Increased reliance on human "Truth Engine" verification (Field Staff) to confirm validity of citizen reports.
+## ADR 002: Integration of Apify for Live OSINT Ingestion
+
+### Context
+Government agencies often lack real-time access to the "Digital Pulse" of the city. Waiting for citizens to download a formal app creates a delay in response times.
+
+### Decision
+We have implemented a **Social Uplink Bridge** using the Apify API to ingest live Twitter/X and Facebook data.
+
+### Rationale
+1. **Low-Latency Proactivity:** By scraping mentions of official handles and crisis-related hashtags, Muhafiz-X can identify emergencies 5-10 minutes before a formal report is filed.
+2. **Cost-Effective Prototyping:** Apify's free tier allows for a high-fidelity "Live Simulation" without expensive Enterprise API contracts with social platforms.
+3. **Agentic Pre-Processing:** Raw social data is passed to **The Sentinel** agent, which acts as an intelligence filter to ensure the Dispatcher only acts on verified, high-urgency reports.
+
+### Status
+**Active**: The `social_uplink.js` bridge is operational as a Phase 2 intelligence layer.
+

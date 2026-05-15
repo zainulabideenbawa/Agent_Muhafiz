@@ -48,10 +48,9 @@ app.post('/tools/vitals', (req, res) => {
     });
 });
 
-import { getDeptResources, updateDeptResources } from './db.js';
+import { getDeptResources, updateDeptResources, saveIncident, updateIncidentState } from './db.js';
 
 app.get('/tools/resources', (req, res) => {
-    // Legacy support for general tool call
     res.json(getDeptResources('KMC_HEALTH'));
 });
 
@@ -66,43 +65,34 @@ app.post('/api/department-resources/:deptId', (req, res) => {
 
 app.post('/tools/simulate', (req, res) => {
     const { action_plan } = req.body;
-    const isApproved = Math.random() > 0.2; // 80% success rate for simulation
-    
-    res.json({
-        approved: isApproved,
-        time_saved_minutes: isApproved ? 45 : 0,
-        congestion_reduction_percent: isApproved ? 30 : 0
-    });
+    const isApproved = Math.random() > 0.2;
+    res.json({ approved: isApproved, time_saved_minutes: isApproved ? 45 : 0 });
 });
-
-// Start a simulated crisis
-app.post('/api/trigger-crisis', async (req, res) => {
-    console.log('[API] Triggering Crisis Simulation...');
+export const runSovereignLogic = async (incidentId, input) => {
+    console.log(`[Autonomous Logic] Initiating Agents for ${incidentId}`);
     
     try {
-        const { input } = req.body;
-        const incidentId = `MHFZ-${Math.floor(1000 + Math.random() * 9000)}`;
-        
         const initialState = {
             signal: { raw_input: input || "NIPA doob gaya" },
-            metadata: { incidentId }, // Track this throughout the graph
+            metadata: { incidentId }, 
             traceLogs: []
         };
         
         const stream = await muhafizGraph.stream(initialState);
-        
         let assignedDept = null;
+        let finalState = { ...initialState };
+
         for await (const chunk of stream) {
             const nodeName = Object.keys(chunk)[0];
             const stateUpdate = chunk[nodeName];
             
             if (stateUpdate.assigned_department) assignedDept = stateUpdate.assigned_department;
             
-            console.log(`[Graph] Node finished: ${nodeName}`);
-            
+            // Sync current state for persistence
+            finalState = { ...finalState, ...stateUpdate };
+
             if (stateUpdate && stateUpdate.traceLogs && stateUpdate.traceLogs.length > 0) {
                 const latestLog = stateUpdate.traceLogs[stateUpdate.traceLogs.length - 1];
-                console.log(`[Broadcast] Trace for ${assignedDept || 'System'}: ${latestLog.agent}`);
                 broadcast({
                     type: 'TRACE_LOG',
                     incidentId,
@@ -120,15 +110,34 @@ app.post('/api/trigger-crisis', async (req, res) => {
                 });
             }
             
-            // Artificial delay for UI dramatic effect
+            // Persist step-by-step state to Neon
+            await updateIncidentState(incidentId, 'PROCESSING', finalState);
+            
             await new Promise(resolve => setTimeout(resolve, 1500));
         }
-        
-        res.json({ success: true });
+
+        await updateIncidentState(incidentId, 'COMPLETED', finalState);
+        console.log(`[Autonomous Logic] Mission ${incidentId} Complete.`);
+        return { success: true };
     } catch (error) {
-        console.error('[Error] Graph Execution Failed:', error);
-        res.status(500).json({ success: false, error: error.message });
+        console.error(`[Autonomous Logic] Error:`, error);
+        await updateIncidentState(incidentId, 'FAILED', { error: error.message });
+        return { success: false, error: error.message };
     }
+};
+
+// Start a simulated crisis
+app.post('/api/trigger-crisis', async (req, res) => {
+    const { input } = req.body;
+    const incidentId = `MHFZ-${Math.floor(1000 + Math.random() * 9000)}`;
+    
+    // 1. Persist to Database First (The Ingest)
+    await saveIncident(incidentId, 'UNKNOWN', 'ANALYZING', input);
+    
+    // 2. Trigger Logic (Autonomous)
+    runSovereignLogic(incidentId, input);
+    
+    res.json({ success: true, incidentId });
 });
 
 const PORT = 3001;

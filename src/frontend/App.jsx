@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, X, Shield } from 'lucide-react';
+import { Menu, X, Shield, Globe } from 'lucide-react';
 import AgentTraceTerminal from './components/AgentTraceTerminal';
 import DigitalTwinMap from './components/DigitalTwinMap';
 import MetricsUI from './components/MetricsUI';
