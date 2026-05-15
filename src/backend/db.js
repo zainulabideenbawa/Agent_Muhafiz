@@ -78,5 +78,16 @@ export const saveIncident = async (state) => {
     } catch (error) {
         console.error("❌ Error saving incident:", error);
     }
+    await new Promise(resolve => setTimeout(resolve, 300));
     return true;
+};
+
+export const getDeptResources = (deptId) => {
+    return departmentResources[deptId] || departmentResources['KMC_HEALTH'];
+};
+
+export const updateDeptResources = (deptId, hubs) => {
+    departmentResources[deptId] = hubs;
+    console.log(`[Neon DB] Updated hubs for ${deptId}`);
+    return departmentResources[deptId];
 };

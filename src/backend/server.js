@@ -48,14 +48,20 @@ app.post('/tools/vitals', (req, res) => {
     });
 });
 
+import { getDeptResources, updateDeptResources } from './db.js';
+
 app.get('/tools/resources', (req, res) => {
-    res.json({
-        suction_trucks: 15,
-        ambulances: 20,
-        fire_trucks: 10,
-        police_units: 30,
-        rescue_teams: 12
-    });
+    // Legacy support for general tool call
+    res.json(getDeptResources('KMC_HEALTH'));
+});
+
+app.get('/api/department-resources/:deptId', (req, res) => {
+    res.json(getDeptResources(req.params.deptId));
+});
+
+app.post('/api/department-resources/:deptId', (req, res) => {
+    const updated = updateDeptResources(req.params.deptId, req.body);
+    res.json(updated);
 });
 
 app.post('/tools/simulate', (req, res) => {
@@ -96,6 +102,7 @@ app.post('/api/trigger-crisis', async (req, res) => {
             
             if (stateUpdate && stateUpdate.traceLogs && stateUpdate.traceLogs.length > 0) {
                 const latestLog = stateUpdate.traceLogs[stateUpdate.traceLogs.length - 1];
+                console.log(`[Broadcast] Trace for ${assignedDept || 'System'}: ${latestLog.agent}`);
                 broadcast({
                     type: 'TRACE_LOG',
                     incidentId,

@@ -36,22 +36,30 @@ export const get_city_vitals = async (location) => {
 /**
  * Tool for The Strategist: Connects to /tools/resources
  */
-export const get_resource_status = async () => {
-    console.log(`[Agent Tool] Fetching resources from API`);
+export const get_resource_status = async (deptId) => {
+    const targetDept = deptId || 'KMC_HEALTH';
+    console.log(`[Agent Tool] Fetching granular resources for department: ${targetDept}`);
     try {
-        const response = await fetch(`${BACKEND_URL}/tools/resources`);
-        const data = await response.json();
+        const response = await fetch(`${BACKEND_URL}/api/department-resources/${targetDept}`);
+        const hubs = await response.json();
         
-        // Transform API response to Agent's resource object
+        // Return the actual hubs so the Strategist can see locations
         return {
-            available_resources: {
-                suction_trucks: Array(data.suction_trucks).fill(0).map((_, i) => ({ id: `ST-${i}`, status: "idle" })),
-                ambulances: Array(data.ambulances).fill(0).map((_, i) => ({ id: `AMB-${i}`, status: "idle" }))
-            }
+            department: targetDept,
+            hubs: hubs.map(hub => ({
+                id: hub.id,
+                name: hub.name,
+                location: hub.location,
+                inventory: {
+                    trucks: Array(hub.trucks).fill(0).map((_, i) => ({ id: `${hub.id}-TR-${i}`, status: "idle" })),
+                    ambulances: Array(hub.ambulances).fill(0).map((_, i) => ({ id: `${hub.id}-AMB-${i}`, status: "idle" })),
+                    officers: Array(hub.officers).fill(0).map((_, i) => ({ id: `${hub.id}-OFF-${i}`, status: "ready" }))
+                }
+            }))
         };
     } catch (error) {
         console.error("Tool Error (resources):", error);
-        return { available_resources: { suction_trucks: [], ambulances: [] } };
+        return { department: targetDept, hubs: [] };
     }
 };
 
