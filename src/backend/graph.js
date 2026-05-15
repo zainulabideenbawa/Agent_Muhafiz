@@ -1,5 +1,8 @@
-import { StateGraph } from "@langchain/langgraph";
+import { START, END, StateGraph } from "@langchain/langgraph";
 import { get_city_vitals, get_resource_status, run_impact_simulation } from "./tools.js";
+import { saveIncident } from "./db.js";
+
+
 
 /**
  * 1. Initialize the Graph
@@ -221,7 +224,11 @@ You are responsible for the "False Negative" handling. If a crisis is resolved, 
         outcome: isResolved ? "Crisis Resolved" : "Active Crisis"
     };
 
+    // Persist the final state to Neon DB
+    await saveIncident(state);
+
     return {
+
         audit_trail: {
             agent_decisions: state.traceLogs?.map(t => t.agent) || [],
             field_verification: isResolved ? "verified_clear" : "pending",
@@ -233,8 +240,8 @@ You are responsible for the "False Negative" handling. If a crisis is resolved, 
 
 /**
  * 2. Define Handoffs
- * The state transition from The Sentinel to The Truth-Engine
  */
+workflow.addEdge(START, "TheSentinel");
 workflow.addEdge("TheSentinel", "TheTruthEngine");
 
 // Standard workflow progression for remaining agents
@@ -243,5 +250,7 @@ workflow.addEdge("TheAnalyst", "TheStrategist");
 workflow.addEdge("TheStrategist", "TheOracle");
 workflow.addEdge("TheOracle", "TheCommunicator");
 workflow.addEdge("TheCommunicator", "TheAuditor");
+workflow.addEdge("TheAuditor", END);
+
 
 export const muhafizGraph = workflow.compile();

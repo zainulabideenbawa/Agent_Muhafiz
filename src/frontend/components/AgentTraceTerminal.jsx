@@ -12,7 +12,7 @@ const AgentTraceTerminal = ({ traces = [] }) => {
         {/* Terminal Header */}
         <div className="px-6 py-4 border-b border-zinc-800 flex justify-between items-center bg-[#121214]">
           <h2 className="text-muhafiz-green font-bold text-xl tracking-wider flex items-center">
-            MUHAFIZ-X 
+            MUHAFIZ-X
             <span className="text-zinc-500 font-mono text-sm ml-3">AGENTIC_TRACE_TERMINAL</span>
           </h2>
           <div className="flex gap-2">
@@ -22,7 +22,7 @@ const AgentTraceTerminal = ({ traces = [] }) => {
             <span className="h-3 w-3 rounded-full bg-muhafiz-green"></span>
           </div>
         </div>
-        
+
         {/* Terminal Body */}
         <div className="p-6 h-[500px] overflow-y-auto font-mono text-sm space-y-5">
           {traces.length === 0 && (
@@ -30,13 +30,13 @@ const AgentTraceTerminal = ({ traces = [] }) => {
               <span className="animate-pulse">Awaiting Agentic Signals...</span>
             </div>
           )}
-          
+
           {traces.map((trace, idx) => {
             const isSuccess = trace.outcome === 'Success' || trace.outcome === 'Verified';
-            
+
             return (
-              <div 
-                key={idx} 
+              <div
+                key={idx}
                 className="flex flex-col gap-1 border-l-2 border-zinc-800 pl-4 hover:border-muhafiz-indigo transition-colors duration-300"
               >
                 <div className="flex items-center gap-3">
@@ -44,7 +44,7 @@ const AgentTraceTerminal = ({ traces = [] }) => {
                   <span className="text-muhafiz-indigo font-bold">{trace.agent}</span>
                 </div>
                 <div className="text-zinc-300 mt-1">
-                  > {trace.message}
+                  {trace.message}
                 </div>
                 <div className="flex items-center gap-2 mt-1">
                   <span className="text-zinc-500">OUTCOME:</span>

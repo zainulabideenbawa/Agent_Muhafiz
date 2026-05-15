@@ -1,0 +1,11 @@
+node_modules
+.DS_Store
+.env
+dist
+build
+*.log
+package-lock.json
+yarn-error.log
+.gemini
+.env.local
+.env

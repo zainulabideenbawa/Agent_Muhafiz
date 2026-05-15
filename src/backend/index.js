@@ -3,10 +3,15 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import { muhafizGraph } from './graph.js';
+import { initDb } from './db.js';
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Initialize Neon DB
+initDb();
+
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
