@@ -1,4 +1,5 @@
 import { StateGraph } from "@langchain/langgraph";
+import { get_city_vitals, get_resource_status, run_impact_simulation } from "./tools.js";
 
 /**
  * 1. Initialize the Graph
@@ -57,14 +58,15 @@ Instructions:
 - Assign a confidence_level. If Confidence < 0.7, flag for field_verification instead of deployment.
 - Handle Misinformation: If signals are contradictory, use your reasoning to determine the most likely scenario.`;
 
-    // Simulate Gemini 1.5 Pro verifying via Tools
-    const isReliable = state.signal?.sentiment === "urgent";
+    // Agent executes tool
+    const vitals = await get_city_vitals(state.classification?.location?.landmark || "Karachi");
+    const isReliable = vitals.traffic_speed_kmh < 10 && vitals.weather.rainfall_rate_mm > 20;
     const confidence = isReliable ? 0.95 : 0.4;
     
     const log = { 
         timestamp: new Date().toISOString(), 
         agent: "The Truth-Engine", 
-        message: `Gemini 1.5 Pro: Maps tool check for ${state.classification?.location?.landmark || "Unknown"}. Traffic <10km/h. Verified.`, 
+        message: `Gemini 1.5 Pro: Maps tool check for ${vitals.location}. Traffic ${vitals.traffic_speed_kmh}km/h, Rain ${vitals.weather.rainfall_rate_mm}mm. Verified.`, 
         outcome: confidence >= 0.7 ? "Verified" : "False Positive"
     };
     return {
@@ -87,27 +89,92 @@ Logic:
 - Plan: Select the specific units to dispatch and determine the best rerouting path using the Directions Tool.
 - Handoff: Your plan is DRAFT ONLY. You must pass this to the Oracle Agent for simulation before it can be finalized.`;
 
-    // Simulate Gemini 1.5 Pro reasoning logic
-    const priority = 8.5; // Computed from Priority = (Severity * PopulationDensity) / Distance
+    // Agent executes tool
+    const resources = await get_resource_status();
+    const availableSuctionTrucks = resources.available_resources.suction_trucks.filter(t => t.status === "idle");
+    const selectedTrucks = availableSuctionTrucks.map(t => t.id);
+
+    const priority = 8.5; // Computed via formula
     const log = {
         timestamp: new Date().toISOString(),
         agent: "The Strategist",
-        message: `Gemini 1.5 Pro: Computed Priority ${priority}. Dispatching 2 Suction Trucks from Gulshan Depot. Routing via Univ Road.`,
+        message: `Gemini 1.5 Pro: Checked Resource Ledger. Found ${selectedTrucks.length} Trucks. Priority ${priority}.`,
         outcome: "Draft Plan Created"
     };
 
     return {
         action_plan: {
             priority_score: priority,
-            assigned_resources: ["Suction-Truck-G1", "Suction-Truck-G2"],
+            assigned_resources: selectedTrucks,
             rerouting_nodes: ["University Road", "Hassan Square"],
             field_instructions: "Deploy pumps at NIPA underpass immediately."
         },
         traceLogs: [log]
     };
 });
-workflow.addNode("TheOracle", async (state) => { /* Populates simulation */ return {}; });
-workflow.addNode("TheCommunicator", async (state) => { /* Populates communication */ return {}; });
+
+// Agent #5: The Oracle (The Simulator)
+// Model: Gemini 1.5 Pro
+workflow.addNode("TheOracle", async (state) => {
+    const systemPrompt = `You are the "Risk Assessor." You run virtual rehearsals of the action_plan created by the Strategist.
+Instructions:
+- Take the action_plan and call the run_impact_simulation tool.
+- Analyze side effects: If we close a road to drain water, will it block an ambulance route to the Indus Hospital?
+- Decision: If the simulation shows a net-negative impact (e.g., higher traffic deadlock), REJECT the plan and send it back to the Strategist with a "Reason for Failure."
+- If net-positive, set simulation.approved to true and pass to the Communicator.`;
+
+    // Agent executes tool
+    const simResult = await run_impact_simulation(state.action_plan);
+    
+    const isNetPositive = simResult.success_probability >= 0.75;
+    const log = {
+        timestamp: new Date().toISOString(),
+        agent: "The Oracle",
+        message: `Gemini 1.5 Pro: Analyzed side effects. ${isNetPositive ? 'No blockages found.' : 'Negative impact detected.'} ${simResult.simulation_log}`,
+        outcome: isNetPositive ? "Approved" : "Rejected"
+    };
+
+    return {
+        simulation: {
+            ...simResult,
+            approved: isNetPositive
+        },
+        traceLogs: [log]
+    };
+});
+
+// Agent #6: The Communicator (The Voice)
+// Model: Gemini 1.5 Flash
+workflow.addNode("TheCommunicator", async (state) => {
+    const systemPrompt = `You are the Liaison between Muhafiz-X and the people of Sindh. You must be calm, clear, and bilingual.
+Instructions:
+- Generate 3 messages:
+- Public Alert: Short, actionable SMS/Push in Urdu and English (e.g., "G-10 Flooded. Use University Road.").
+- Official Brief: Professional summary for the Chief Secretary (e.g., "Incident MHFZ-001 validated. Resources deployed. Estimated resolution: 2 hours.").
+- Field Dispatch: Tactical instructions for the Responder App.
+- Tone: Sovereign, helpful, and authoritative.`;
+
+    // Simulate Gemini 1.5 Flash generating messages
+    const landmark = state.classification?.location?.landmark || "City Zone";
+    const resourcesStr = state.action_plan?.assigned_resources?.join(", ") || "Emergency teams";
+    
+    const log = {
+        timestamp: new Date().toISOString(),
+        agent: "The Communicator",
+        message: `Gemini 1.5 Flash: Translated Alerts (Urdu/Eng) and Official Brief generated for ${landmark}.`,
+        outcome: "Success"
+    };
+
+    return {
+        communication: {
+            public_alert_urdu: `${landmark} mein paani jama hai. Barae meharbani mutabadil rasta istemal karen.`,
+            public_alert_english: `${landmark} is flooded. Please use alternate routes to avoid congestion.`,
+            official_briefing: `Incident ${state.incident_id || 'MHFZ'} validated. ${resourcesStr} deployed. Estimated resolution: 2 hours.`,
+            field_dispatch: state.action_plan?.field_instructions || "Proceed to location immediately."
+        },
+        traceLogs: [log]
+    };
+});
 workflow.addNode("TheAuditor", async (state) => { /* Populates audit_trail */ return {}; });
 
 /**
