@@ -34,46 +34,85 @@ const broadcast = (message) => {
     });
 };
 
+// Tool Endpoints: Logic for the 7-Agent Council
+app.post('/tools/vitals', (req, res) => {
+    const { location } = req.body;
+    console.log(`[Tool] Vitals request for: ${location}`);
+    
+    // Simulate real-time sensors
+    res.json({
+        location: location,
+        traffic_speed: 12 + Math.floor(Math.random() * 20), // km/h
+        rainfall: 25 + Math.floor(Math.random() * 30),     // mm
+        water_level: 15 + Math.floor(Math.random() * 50)   // cm
+    });
+});
+
+app.get('/tools/resources', (req, res) => {
+    res.json({
+        suction_trucks: 15,
+        ambulances: 20,
+        fire_trucks: 10,
+        police_units: 30,
+        rescue_teams: 12
+    });
+});
+
+app.post('/tools/simulate', (req, res) => {
+    const { action_plan } = req.body;
+    const isApproved = Math.random() > 0.2; // 80% success rate for simulation
+    
+    res.json({
+        approved: isApproved,
+        time_saved_minutes: isApproved ? 45 : 0,
+        congestion_reduction_percent: isApproved ? 30 : 0
+    });
+});
+
 // Start a simulated crisis
 app.post('/api/trigger-crisis', async (req, res) => {
     console.log('[API] Triggering Crisis Simulation...');
     
-    // Initial state to kick off The Sentinel
-    const initialState = {
-        signal: { raw_input: req.body.input || "NIPA doob gaya" }
-    };
-    
     try {
-        // Since we simulate agents sequentially, we will use the stream method 
-        // from LangGraph to get updates after each node finishes.
+        const { input } = req.body;
+        const incidentId = `MHFZ-${Math.floor(1000 + Math.random() * 9000)}`;
+        
+        const initialState = {
+            signal: { raw_input: input || "NIPA doob gaya" },
+            metadata: { incidentId }, // Track this throughout the graph
+            traceLogs: []
+        };
+        
         const stream = await muhafizGraph.stream(initialState);
         
-        let finalState = null;
-
-        // Iterate over the stream of node executions
         for await (const chunk of stream) {
-            // chunk is an object like { "TheSentinel": { ...stateUpdate } }
             const nodeName = Object.keys(chunk)[0];
             const stateUpdate = chunk[nodeName];
             
             console.log(`[Graph] Node finished: ${nodeName}`);
             
-            // Broadcast the latest trace logs to the frontend
             if (stateUpdate && stateUpdate.traceLogs && stateUpdate.traceLogs.length > 0) {
-                // Send just the latest log
+                const latestLog = stateUpdate.traceLogs[stateUpdate.traceLogs.length - 1];
                 broadcast({
                     type: 'TRACE_LOG',
-                    log: stateUpdate.traceLogs[stateUpdate.traceLogs.length - 1]
+                    incidentId,
+                    log: latestLog
+                });
+            }
+
+            if (nodeName === 'TheCommunicator' && stateUpdate.communication) {
+                broadcast({
+                    type: 'COMMUNICATION_ALERT',
+                    incidentId,
+                    data: stateUpdate.communication
                 });
             }
             
-            finalState = stateUpdate;
-            
-            // Add a small artificial delay so the UI animation feels like "thinking"
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            // Artificial delay for UI dramatic effect
+            await new Promise(resolve => setTimeout(resolve, 1500));
         }
         
-        res.json({ success: true, finalState });
+        res.json({ success: true });
     } catch (error) {
         console.error('[Error] Graph Execution Failed:', error);
         res.status(500).json({ success: false, error: error.message });
