@@ -151,37 +151,34 @@ workflow.addNode("TheAnalyst", async (state) => {
 
 // Agent #3: The Strategist (Resource & Action Planner)
 workflow.addNode("TheStrategist", async (state) => {
-    const resources = await get_resource_status();
+    const resources = await get_resource_status(state.assigned_department);
     
-    const systemPrompt = `You are the Master Commander. Allocate resources for maximum safety.
-    Available Inventory: ${JSON.stringify(resources)}
-    Impact Analysis: ${JSON.stringify(state.impact_analysis)}
+    const systemPrompt = `You are the Master Commander for ${state.assigned_department}.
+    Inventory (Hub-based): ${JSON.stringify(resources.hubs)}
+    Impact: ${JSON.stringify(state.impact_analysis)}
     
     Logic:
-    - Use Priority Formula: (Severity * PopulationDensity) / Distance.
-    - Allocate specific units from Police, Fire Brigade, Suction Trucks, and Ambulances.
-    - Output ONLY JSON for: action_plan {priority_score, assigned_resources, rerouting_nodes, field_instructions}.`;
+    - DISPATCH: Select units from the HUB closest to ${state.classification?.location?.landmark}.
+    - PRIORITY: (Severity * PopulationDensity) / Distance.
+    - Output ONLY JSON: action_plan {priority_score, assigned_hub, assigned_resources, field_instructions}.`;
 
     let result;
     try {
         const response = await proModel.invoke([
             ["system", systemPrompt],
-            ["user", "Create a multi-department tactical plan."]
+            ["user", "Create a hub-based tactical deployment plan."]
         ]);
         result = JSON.parse(response.content.replace(/```json|```/g, "").trim());
     } catch (e) {
         console.warn("[Strategist] LLM Failed, using fallback.");
-        result = { action_plan: { priority_score: 9.5, assigned_resources: ["POLICE-UNIT-4", "FIRE-TRUCK-2", "SUCTION-T-1"], rerouting_nodes: ["Shahrah-e-Faisal", "Stadium Road"], field_instructions: "Establish 500m perimeter and deploy suction pumps." } };
+        const hub = resources.hubs?.[0] || { id: 'FALLBACK', name: 'Central Station' };
+        result = { action_plan: { priority_score: 9.5, assigned_hub: hub.name, assigned_resources: ["TRUCK-1", "OFFICER-4"], field_instructions: "Deploy from nearest hub." } };
     }
     
-    const unitList = Array.isArray(result.action_plan?.assigned_resources) 
-        ? result.action_plan.assigned_resources.map(u => typeof u === 'object' ? JSON.stringify(u) : u).join(", ") 
-        : (typeof result.action_plan?.assigned_resources === 'object' ? "Tactical Units" : result.action_plan?.assigned_resources || "Mixed Response");
-
     const log = {
         timestamp: new Date().toISOString(),
         agent: "The Strategist",
-        message: `Resource allocation complete. Units: ${unitList}. Priority: ${result.action_plan?.priority_score}.`,
+        message: `Plan created for ${state.assigned_department}. Deploying from: ${result.action_plan?.assigned_hub || "Central Hub"}. Units: ${Array.isArray(result.action_plan?.assigned_resources) ? result.action_plan.assigned_resources.join(", ") : "Rapid Response"}.`,
         outcome: "Draft Plan Created"
     };
 
