@@ -76,8 +76,35 @@ Instructions:
     };
 });
 
-// The Analyst (Severity Prediction)
-workflow.addNode("TheAnalyst", async (state) => { /* Populates impact_analysis */ return {}; });
+// Agent #4: The Analyst (Evolution)
+// Model: Gemini 1.5 Pro
+workflow.addNode("TheAnalyst", async (state) => {
+    const systemPrompt = `You are the "Time Traveler." You receive the validated crisis from the Truth-Engine. Your job is to predict the "Next 60 Minutes."
+Calculate spread: If it's a flood at location, check if elevation data suggests nearby blocks will submerge.
+Infrastructure Risk: Identify if the crisis blocks routes to Aga Khan Hospital or Indus Hospital.
+Fill the impact_analysis field in the CrisisObject.`;
+
+    // Simulate Gemini 1.5 Pro analyzing the evolution
+    const landmark = state.classification?.location?.landmark || "Unknown Location";
+    const isFlood = state.classification?.type === "urban_flood";
+    
+    const log = {
+        timestamp: new Date().toISOString(),
+        agent: "The Analyst",
+        message: `Gemini 1.5 Pro: Predicted spread for ${landmark}. ${isFlood ? "Indus Hospital route at risk." : "No critical infrastructure blocked."}`,
+        outcome: "Success"
+    };
+
+    return {
+        impact_analysis: {
+            estimated_duration: isFlood ? "4 hours" : "1 hour",
+            affected_population: isFlood ? 15000 : 500,
+            critical_infrastructure_risk: isFlood ? ["Indus Hospital", "K-Electric Grid"] : [],
+            spread_prediction: isFlood ? "high" : "low"
+        },
+        traceLogs: [log]
+    };
+});
 
 // Agent #3: The Strategist (Resource & Action Planner)
 // Model: Gemini 1.5 Pro (Reasoning)
@@ -175,7 +202,33 @@ Instructions:
         traceLogs: [log]
     };
 });
-workflow.addNode("TheAuditor", async (state) => { /* Populates audit_trail */ return {}; });
+// Agent #7: The Auditor (Recovery & Truth)
+// Model: Gemini 1.5 Pro
+workflow.addNode("TheAuditor", async (state) => {
+    const systemPrompt = `You are the "Final Judge." You monitor the field_verification status.
+If a Field Officer reports "Road Clear" but the system still shows "Active Crisis," you must trigger a State Retraction.
+You are responsible for the "False Negative" handling. If a crisis is resolved, you update the audit_trail and signal the Communicator to send a "Crisis Resolved" alert.`;
+
+    // Simulate Gemini 1.5 Pro auditing the final state
+    // In a real system, this would wait for a webhook or field app input
+    const isResolved = true; // Simulating a field officer marking it clear after 2 hours
+    
+    const log = {
+        timestamp: new Date().toISOString(),
+        agent: "The Auditor",
+        message: `Gemini 1.5 Pro: Checked field officer status. Road reported clear. Triggering State Retraction.`,
+        outcome: isResolved ? "Crisis Resolved" : "Active Crisis"
+    };
+
+    return {
+        audit_trail: {
+            agent_decisions: state.traceLogs?.map(t => t.agent) || [],
+            field_verification: isResolved ? "verified_clear" : "pending",
+            retraction_triggered: isResolved
+        },
+        traceLogs: [log]
+    };
+});
 
 /**
  * 2. Define Handoffs
