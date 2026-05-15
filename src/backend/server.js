@@ -85,9 +85,12 @@ app.post('/api/trigger-crisis', async (req, res) => {
         
         const stream = await muhafizGraph.stream(initialState);
         
+        let assignedDept = null;
         for await (const chunk of stream) {
             const nodeName = Object.keys(chunk)[0];
             const stateUpdate = chunk[nodeName];
+            
+            if (stateUpdate.assigned_department) assignedDept = stateUpdate.assigned_department;
             
             console.log(`[Graph] Node finished: ${nodeName}`);
             
@@ -96,6 +99,7 @@ app.post('/api/trigger-crisis', async (req, res) => {
                 broadcast({
                     type: 'TRACE_LOG',
                     incidentId,
+                    assigned_department: assignedDept,
                     log: latestLog
                 });
             }
@@ -104,6 +108,7 @@ app.post('/api/trigger-crisis', async (req, res) => {
                 broadcast({
                     type: 'COMMUNICATION_ALERT',
                     incidentId,
+                    assigned_department: assignedDept,
                     data: stateUpdate.communication
                 });
             }

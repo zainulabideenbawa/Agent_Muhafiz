@@ -35,6 +35,7 @@ const crisisStateSchema = {
     simulation: { value: (prev, curr) => ({ ...prev, ...curr }), default: () => ({}) },
     communication: { value: (prev, curr) => ({ ...prev, ...curr }), default: () => ({}) },
     audit_trail: { value: (prev, curr) => ({ ...prev, ...curr }), default: () => ({}) },
+    assigned_department: { value: (prev, curr) => curr || prev, default: () => null },
     traceLogs: { value: (prev, curr) => prev.concat(curr), default: () => [] } // Used by AgentTraceTerminal UI
 };
 
@@ -288,10 +289,41 @@ workflow.addNode("TheAuditor", async (state) => {
     };
 });
 
+// Agent #0: The Dispatcher (Intelligent Routing)
+workflow.addNode("TheDispatcher", async (state) => {
+    const systemPrompt = `You are the Sovereign Dispatcher. 
+    Classify the signal into: FIRE_BRIGADE, POLICE_FORCE, KMC_HEALTH, or RESCUE_1122.
+    Output ONLY JSON: { department: "DEPT_NAME", category: "type" }`;
+
+    let result;
+    try {
+        const response = await flashModel.invoke([
+            ["system", systemPrompt],
+            ["user", `Signal: ${state.signal?.raw_input}`]
+        ]);
+        result = JSON.parse(response.content.replace(/```json|```/g, "").trim());
+    } catch (e) {
+        result = { department: "KMC_HEALTH", category: "urban_flood" };
+    }
+
+    const log = {
+        timestamp: new Date().toISOString(),
+        agent: "The Dispatcher",
+        message: `Signal analyzed and routed to ${result.department}.`,
+        outcome: "Routed"
+    };
+
+    return {
+        assigned_department: result.department,
+        traceLogs: [log]
+    };
+});
+
 /**
  * 2. Define Handoffs
  */
-workflow.addEdge(START, "TheSentinel");
+workflow.addEdge(START, "TheDispatcher");
+workflow.addEdge("TheDispatcher", "TheSentinel");
 workflow.addEdge("TheSentinel", "TheTruthEngine");
 
 // Standard workflow progression for remaining agents

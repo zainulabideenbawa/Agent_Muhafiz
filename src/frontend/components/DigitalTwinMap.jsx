@@ -65,7 +65,9 @@ const DigitalTwinMap = ({ incidents = [] }) => {
                 {/* Floating Label */}
                 <div className="absolute -top-10 px-3 py-1 bg-black/80 border border-white/20 rounded-md backdrop-blur-md shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-500 whitespace-nowrap z-50">
                   <div className="flex flex-col">
-                    <span className="text-[8px] font-black uppercase tracking-widest" style={{ color }}>{incident.type.replace('_', ' ')}</span>
+                    <span className="text-[8px] font-black uppercase tracking-widest" style={{ color }}>
+                      {incident.department?.replace('_', ' ') || 'DISPATCHING...'}
+                    </span>
                     <span className="text-[10px] font-bold text-white uppercase">{incident.location?.landmark}</span>
                   </div>
                   {/* Small arrow */}
