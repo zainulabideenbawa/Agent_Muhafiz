@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
-import 'dart:math' as math;
+import 'package:animate_do/animate_do.dart';
+import 'dart:io';
+import '../services/api_service.dart';
+import '../widgets/feedback_widgets.dart';
 import '../theme/theme.dart';
 
 class VoiceReportScreen extends StatefulWidget {
@@ -9,195 +12,178 @@ class VoiceReportScreen extends StatefulWidget {
   State<VoiceReportScreen> createState() => _VoiceReportScreenState();
 }
 
-class _VoiceReportScreenState extends State<VoiceReportScreen> with TickerProviderStateMixin {
-  bool isRecording = false;
-  String transcription = '';
-  late AnimationController _waveController;
+class _VoiceReportScreenState extends State<VoiceReportScreen> with SingleTickerProviderStateMixin {
+  final TextEditingController _controller = TextEditingController();
+  bool _isSubmitting = false;
+  late AnimationController _pulseController;
 
   @override
   void initState() {
     super.initState();
-    _waveController = AnimationController(
+    _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 500),
-    )..repeat(reverse: true);
+      duration: const Duration(seconds: 2),
+    )..repeat();
   }
 
   @override
   void dispose() {
-    _waveController.dispose();
+    _pulseController.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
-  void _toggleRecording() {
-    setState(() {
-      isRecording = !isRecording;
-      if (isRecording) {
-        _simulateTranscription();
-      } else {
-        transcription = '';
-      }
-    });
-  }
+  void _handleSubmit() async {
+    if (_controller.text.isEmpty) {
+      MuhafizFeedback.showToast("Signal content required");
+      return;
+    }
 
-  void _simulateTranscription() async {
-    const mockText = "NIPA Chowrangi ke paas bohat pani jama hai, gaarian phasi hui hain...";
-    for (int i = 0; i < mockText.length; i++) {
-      if (!isRecording) break;
-      await Future.delayed(const Duration(milliseconds: 100));
-      setState(() {
-        transcription += mockText[i];
+    setState(() => _isSubmitting = true);
+    
+    try {
+      final response = await ApiService.post('/report', {
+        'signal': _controller.text,
+        'metadata': {'type': 'citizen_report', 'priority': 'high'}
       });
+
+      if (response['success']) {
+        if (mounted) {
+          Navigator.pop(context);
+          MuhafizFeedback.showSuccess(
+            context, 
+            'The 7-Agent Council has received your signal. Monitor the Pulse dashboard for live reasoning logs.',
+          );
+        }
+      } else {
+        MuhafizFeedback.showToast(response['error'] ?? "Transmission Failed");
+      }
+    } catch (e) {
+      MuhafizFeedback.showToast("Critical Uplink Error");
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: MuhafizTheme.darkBg,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text('Voice Report', style: TextStyle(color: Colors.white)),
+        title: const Text('SOVEREIGN INPUT', style: TextStyle(letterSpacing: 4, fontSize: 12, fontWeight: FontWeight.bold)),
+        leading: const BackButton(color: MuhafizTheme.emerald400),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(24.0),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(32.0),
         child: Column(
           children: [
-            const SizedBox(height: 48),
-            // Status Badge
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: MuhafizTheme.darkCard,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: MuhafizTheme.darkBorder),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
+            const SizedBox(height: 20),
+            
+            // PULSING MIC ANIMATION
+            Center(
+              child: Stack(
+                alignment: Alignment.center,
                 children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: isRecording ? MuhafizTheme.emerald500 : MuhafizTheme.darkTextMuted,
-                    ),
+                  AnimatedBuilder(
+                    animation: _pulseController,
+                    builder: (context, child) {
+                      return Container(
+                        width: 120 + (40 * _pulseController.value),
+                        height: 120 + (40 * _pulseController.value),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: MuhafizTheme.emerald500.withOpacity(0.2 * (1 - _pulseController.value)),
+                        ),
+                      );
+                    },
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    isRecording ? 'Listening...' : 'Ready to record',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  Container(
+                    width: 100,
+                    height: 100,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: MuhafizTheme.emerald600,
+                      boxShadow: [
+                        BoxShadow(color: MuhafizTheme.emerald600, blurRadius: 20, spreadRadius: 2),
+                      ],
+                    ),
+                    child: const Icon(Icons.mic, color: Colors.white, size: 40),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 64),
-
-            // Waveform
-            SizedBox(
-              height: 100,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(20, (index) {
-                  return AnimatedBuilder(
-                    animation: _waveController,
-                    builder: (context, child) {
-                      double randomHeight = isRecording 
-                          ? (math.Random().nextDouble() * 60 + 20) 
-                          : 10;
-                      return Container(
-                        width: 4,
-                        height: randomHeight,
-                        margin: const EdgeInsets.symmetric(horizontal: 2),
-                        decoration: BoxDecoration(
-                          color: isRecording ? MuhafizTheme.emerald500 : MuhafizTheme.darkBorder,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      );
-                    },
-                  );
-                }),
+            
+            const SizedBox(height: 48),
+            
+            FadeInUp(
+              child: const Text(
+                'Tap to Speak to Muhafiz',
+                style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
               ),
             ),
-            const SizedBox(height: 64),
-
-            // Transcription Card
-            Expanded(
+            const SizedBox(height: 8),
+            FadeInUp(
+              delay: const Duration(milliseconds: 200),
+              child: const Text(
+                'Your voice is encrypted and analyzed by the 7-Agent Council.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: MuhafizTheme.darkTextMuted, fontSize: 12),
+              ),
+            ),
+            
+            const SizedBox(height: 48),
+            
+            FadeInUp(
+              delay: const Duration(milliseconds: 400),
               child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
                   color: MuhafizTheme.darkCard,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(24),
                   border: Border.all(color: MuhafizTheme.darkBorder),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'AI LIVE TRANSCRIPTION',
-                      style: TextStyle(
-                        color: MuhafizTheme.emerald500,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      transcription.isEmpty 
-                          ? (isRecording ? 'Waiting for voice...' : 'Your report will appear here as you speak.')
-                          : transcription,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontFamily: 'JetBrains Mono',
-                        fontSize: 16,
-                        height: 1.5,
-                      ),
-                    ),
-                  ],
+                padding: const EdgeInsets.all(20),
+                child: TextField(
+                  controller: _controller,
+                  maxLines: 4,
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
+                  decoration: const InputDecoration(
+                    hintText: 'Or describe the issue manually...',
+                    hintStyle: TextStyle(color: MuhafizTheme.darkTextMuted, fontSize: 14),
+                    border: InputBorder.none,
+                  ),
                 ),
               ),
             ),
+            
+            const SizedBox(height: 48),
+            
+            FadeInUp(
+              delay: const Duration(milliseconds: 600),
+              child: SizedBox(
+                width: double.infinity,
+                height: 64,
+                child: ElevatedButton(
+                  onPressed: _isSubmitting ? null : _handleSubmit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: MuhafizTheme.emerald600,
+                    foregroundColor: Colors.white, // CRISP WHITE TEXT
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    elevation: 10,
+                    shadowColor: MuhafizTheme.emerald600.withOpacity(0.5),
+                  ),
+                  child: _isSubmitting 
+                    ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Text('TRANSMIT SIGNAL', style: TextStyle(letterSpacing: 2, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ),
+            
             const SizedBox(height: 24),
             const Text(
-              'Supported languages: English, Roman Urdu, Sindhi',
-              style: TextStyle(color: MuhafizTheme.darkTextMuted, fontSize: 12, fontStyle: FontStyle.italic),
-            ),
-            const SizedBox(height: 48),
-
-            // Record Button
-            GestureDetector(
-              onTapDown: (_) => _toggleRecording(),
-              onTapUp: (_) => _toggleRecording(),
-              onTapCancel: () => _toggleRecording(),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isRecording ? MuhafizTheme.emerald500 : MuhafizTheme.darkCard,
-                  border: Border.all(color: MuhafizTheme.emerald500, width: 2),
-                  boxShadow: isRecording ? [
-                    BoxShadow(
-                      color: MuhafizTheme.emerald500.withOpacity(0.5),
-                      blurRadius: 20,
-                      spreadRadius: 5,
-                    )
-                  ] : [],
-                ),
-                child: const Icon(Icons.mic, size: 36, color: Colors.white),
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Hold to Record Signal',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              'ACTIVATE VOICE SENSOR',
+              style: TextStyle(color: MuhafizTheme.darkTextMuted, fontSize: 10, letterSpacing: 2, fontWeight: FontWeight.bold),
             ),
           ],
         ),

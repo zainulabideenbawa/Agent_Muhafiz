@@ -1,5 +1,8 @@
+import 'package:flutter/material.dart';
+import 'package:animate_do/animate_do.dart';
 import 'dashboard_screen.dart';
 import 'signup_screen.dart';
+import '../widgets/feedback_widgets.dart';
 import '../theme/theme.dart';
 import '../services/auth_service.dart';
 
@@ -11,198 +14,147 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final _formKey = GlobalKey<FormState>();
   final TextEditingController _nicController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  bool _isLoading = false;
 
   void _handleLogin() async {
-    final response = await AuthService.login(
-      nic: _nicController.text,
-      password: _passwordController.text,
-    );
+    if (!_formKey.currentState!.validate()) return;
 
-    if (response['success']) {
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const DashboardScreen(user: response['user'])),
-        );
+    setState(() => _isLoading = true);
+    
+    try {
+      final response = await AuthService.login(
+        nic: _nicController.text,
+        password: _passwordController.text,
+      );
+
+      if (response['success']) {
+        MuhafizFeedback.showToast("Identity Verified");
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => DashboardScreen(user: response['user'])),
+          );
+        }
+      } else {
+        MuhafizFeedback.showToast(response['error'] ?? 'Identity Verification Failed');
       }
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(response['error'] ?? 'Login Failed')),
-        );
-      }
+    } catch (e) {
+      MuhafizFeedback.showToast("Council Server Unreachable");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: MuhafizTheme.darkBg,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 64.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Logo
-              const _MuhafizLogo(),
-              const SizedBox(height: 16),
-              Text(
-                'Muhafiz-Link',
-                style: MuhafizTheme.darkTheme.textTheme.headlineLarge,
-              ),
-              Text(
-                'SOVEREIGN GATE: IDENTITY PORTAL',
-                style: MuhafizTheme.darkTheme.textTheme.labelSmall?.copyWith(
-                  color: MuhafizTheme.emerald400,
-                ),
-              ),
-              const SizedBox(height: 48),
-
-              // Form
-              _InputField(label: 'NIC NUMBER', controller: _nicController, hint: 'XXXXX-XXXXXXX-X'),
-              const SizedBox(height: 24),
-              _InputField(label: 'PASSWORD', controller: _passwordController, obscure: true),
-              const SizedBox(height: 24),
-
-              // Login Button
-              SizedBox(
-                width: double.infinity,
-                height: 56,
-                child: ElevatedButton(
-                  onPressed: _handleLogin,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: MuhafizTheme.emerald600,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 8,
-                    shadowColor: MuhafizTheme.emerald500.withOpacity(0.5),
-                  ),
-                  child: const Text(
-                    'Access Council Hub',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 24.0),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Align(
+                  alignment: Alignment.topRight,
+                  child: TextButton(
+                    onPressed: () => MuhafizFeedback.showToast("Urdu Language Selected"),
+                    child: const Text('اردو', style: TextStyle(color: MuhafizTheme.emerald400, fontWeight: FontWeight.bold)),
                   ),
                 ),
-              ),
-              
-              const SizedBox(height: 16),
-              TextButton(
-                onPressed: () {
-                  Navigator.push(context, MaterialPageRoute(builder: (context) => const SignupScreen()));
-                },
-                child: const Text('New Citizen? Register Here', style: TextStyle(color: MuhafizTheme.emerald400)),
-              ),
-
-              const SizedBox(height: 48),
-
-              // Biometric
-              Opacity(
-                opacity: 0.7,
-                child: Column(
-                  children: [
-                    const Icon(
-                      Icons.face_unlock_outlined,
-                      color: MuhafizTheme.emerald500,
-                      size: 48,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Sign in with FaceID',
-                      style: MuhafizTheme.darkTheme.textTheme.bodySmall,
-                    ),
-                  ],
+                const Spacer(),
+                FadeInDown(
+                  child: const Text('MUHAFIZ-LINK', style: TextStyle(color: MuhafizTheme.emerald400, letterSpacing: 4, fontWeight: FontWeight.bold, fontSize: 12)),
                 ),
-              ),
-            ],
+                FadeInDown(
+                  delay: const Duration(milliseconds: 200),
+                  child: const Text('CITIZEN PORTAL', style: TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold)),
+                ),
+                const SizedBox(height: 56),
+                
+                // NIC Field with Tactical Icon
+                FadeInUp(
+                  delay: const Duration(milliseconds: 400),
+                  child: TextFormField(
+                    controller: _nicController,
+                    style: const TextStyle(color: Colors.white),
+                    keyboardType: TextInputType.number,
+                    decoration: MuhafizTheme.inputDecoration('CNIC (42101-XXXXXXX-X)').copyWith(
+                      prefixIcon: const Icon(Icons.badge_outlined, color: MuhafizTheme.emerald400, size: 20),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) return 'Please enter your NIC';
+                      if (!RegExp(r'^\d{5}-\d{7}-\d{1}$').hasMatch(value)) return 'Format: XXXXX-XXXXXXX-X';
+                      return null;
+                    },
+                  ),
+                ),
+                
+                const SizedBox(height: 24),
+                
+                // Password Field with Tactical Icon
+                FadeInUp(
+                  delay: const Duration(milliseconds: 600),
+                  child: TextFormField(
+                    controller: _passwordController,
+                    style: const TextStyle(color: Colors.white),
+                    obscureText: true,
+                    decoration: MuhafizTheme.inputDecoration('PASSWORD').copyWith(
+                      prefixIcon: const Icon(Icons.lock_outline, color: MuhafizTheme.emerald400, size: 20),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) return 'Please enter your password';
+                      if (value.length < 6) return 'Minimum 6 characters';
+                      return null;
+                    },
+                  ),
+                ),
+                
+                const SizedBox(height: 48),
+                
+                // FIXED CONTRAST BUTTON
+                FadeInUp(
+                  delay: const Duration(milliseconds: 800),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 60,
+                    child: ElevatedButton(
+                      onPressed: _isLoading ? null : _handleLogin,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: MuhafizTheme.emerald600,
+                        foregroundColor: Colors.white, // CRISP WHITE TEXT
+                        elevation: 8,
+                        shadowColor: MuhafizTheme.emerald600.withOpacity(0.4),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                      child: _isLoading 
+                        ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
+                        : const Text('VERIFY IDENTITY', style: TextStyle(letterSpacing: 2, fontWeight: FontWeight.bold, fontSize: 14)),
+                    ),
+                  ),
+                ),
+                
+                const Spacer(),
+                
+                FadeIn(
+                  delay: const Duration(milliseconds: 1000),
+                  child: Center(
+                    child: TextButton(
+                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SignupScreen())),
+                      child: const Text('NEW CITIZEN? APPLY FOR ACCESS', style: TextStyle(color: MuhafizTheme.emerald400, fontSize: 12, fontWeight: FontWeight.w600)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 }
-
-class _MuhafizLogo extends StatelessWidget {
-  const _MuhafizLogo();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 80,
-      height: 80,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: MuhafizTheme.emerald500, width: 3),
-      ),
-      child: Stack(
-        children: [
-          Center(
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: const BoxDecoration(
-                shape: BoxShape.circle,
-                color: MuhafizTheme.darkBg,
-              ),
-              margin: const EdgeInsets.only(left: 15),
-            ),
-          ),
-          Positioned(
-            top: 15,
-            right: 20,
-            child: Transform.rotate(
-              angle: 45 * 3.14159 / 180,
-              child: Container(
-                width: 10,
-                height: 10,
-                color: MuhafizTheme.emerald500,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InputField extends StatelessWidget {
-  final String label;
-  final String? hint;
-  final bool obscure;
-  final TextEditingController controller;
-
-  const _InputField({required this.label, this.hint, this.obscure = false, required this.controller});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label.toUpperCase(), style: MuhafizTheme.darkTheme.textTheme.labelSmall),
-        const SizedBox(height: 8),
-        TextField(
-          controller: controller,
-          obscureText: obscure,
-          style: const TextStyle(color: Colors.white),
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: const TextStyle(color: MuhafizTheme.darkTextMuted),
-            filled: true,
-            fillColor: MuhafizTheme.darkCard,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: MuhafizTheme.darkBorder),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-

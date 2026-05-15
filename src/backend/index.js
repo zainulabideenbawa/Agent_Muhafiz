@@ -2,12 +2,20 @@ import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
+import dotenv from 'dotenv';
 import { muhafizGraph } from './graph.js';
-import { initDb, createUser, findUserByNic } from './db.js';
+import { initDb, createUser, findUserByNic, sql } from './db.js';
+
+dotenv.config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+    cors: { origin: "*" }
+});
 
 // Initialize Neon DB
 initDb();
@@ -18,204 +26,107 @@ app.post('/api/auth/signup', async (req, res) => {
         const user = await createUser(req.body);
         res.json({ success: true, user: user[0] });
     } catch (error) {
-        res.status(400).json({ success: false, error: "NIC already exists" });
+        console.error("Signup Error:", error);
+        res.status(400).json({ success: false, error: "Enrollment Failed (NIC might exist)" });
     }
 });
 
 app.post('/api/auth/login', async (req, res) => {
     const { nic, password } = req.body;
-    const user = await findUserByNic(nic);
-    if (user && user.password === password) {
-        res.json({ success: true, user });
-    } else {
-        res.status(401).json({ success: false, error: "Invalid credentials" });
-    }
-});
-
-// --- GOV OFFERINGS & ALERTS ---
-app.get('/api/area/pulse/:sector', (req, res) => {
-    const { sector } = req.params;
-    // Mock localized data based on user sector
-    res.json({
-        sector,
-        alerts: [
-            { id: 1, type: "urgent", message: `Gov Alert: ${sector} Dengue Spray Drive starts at 9PM.` }
-        ],
-        vitals: {
-            water_timing: "4:00 PM - 8:00 PM",
-            road_status: "Clear (University Road)",
-            electricity: "Load Shedding: None scheduled"
-        }
-    });
-});
-
-
-const httpServer = createServer(app);
-const io = new Server(httpServer, {
-    cors: {
-        origin: "*", 
-        methods: ["GET", "POST"]
-    }
-});
-
-// WebSocket Connection & Agent Cascade Trigger
-io.on('connection', (socket) => {
-    console.log('Client connected:', socket.id);
-
-    // Event 1: Start Agent Cascade from Admin Dashboard
-    socket.on('trigger-cascade', async (payload) => {
-        await runMuhafizCascade(socket, payload);
-    });
-
-    // Event 2: New Report from Citizen App
-    socket.on('citizen-report', async (payload) => {
-        console.log('New Citizen Report received:', payload.signal);
-        // Add specific metadata for citizen reports
-        const enrichedPayload = {
-            ...payload,
-            source: 'CitizenApp',
-            timestamp: new Date().toISOString()
-        };
-        await runMuhafizCascade(socket, enrichedPayload);
-    });
-
-    socket.on('disconnect', () => {
-        console.log('Client disconnected');
-    });
-});
-
-// --- REST API Endpoints for Agent Tools ---
-
-// 1. Tool: get_city_vitals
-app.post('/tools/vitals', (req, res) => {
-    const { location } = req.body;
-    const mockVitals = {
-        "NIPA": { traffic_speed: 5, rainfall: 45, water_level: 12 },
-        "Sharea Faisal": { traffic_speed: 12, rainfall: 30, water_level: 5 },
-        "G-10": { traffic_speed: 2, rainfall: 55, water_level: 20 }
-    };
-    
-    const data = mockVitals[location] || { traffic_speed: 40, rainfall: 5, water_level: 0 };
-    console.log(`[API] Vitals requested for ${location}`);
-    res.json({ status: "success", ...data });
-});
-
-// 2. Tool: get_resource_status
-app.get('/tools/resources', (req, res) => {
-    console.log(`[API] Resource status requested`);
-    res.json({
-        ambulances: 5,
-        suction_trucks: 3,
-        fire_tenders: 2,
-        police_units: 8,
-        status: "online"
-    });
-});
-
-// 3. Tool: run_impact_simulation
-app.post('/tools/simulate', (req, res) => {
-    const { action_plan } = req.body;
-    const timeSaved = Math.floor(Math.random() * 25) + 10;
-    const congestionDelta = -20 - Math.floor(Math.random() * 30);
-    
-    console.log(`[API] Simulation triggered for plan`);
-    res.json({
-        approved: true,
-        time_saved_minutes: timeSaved,
-        congestion_reduction_percent: congestionDelta,
-        lives_at_risk_mitigated: 4
-    });
-});
-
-// 4. Internal Trace: Antigravity calls this when an agent finishes a "thought"
-app.post('/internal/trace', (req, res) => {
-    const { agent, message, status } = req.body;
-    console.log(`[Internal Trace] ${agent}: ${message}`);
-    
-    // Broadcast to the dashboard via WebSockets
-    io.emit('agent_trace', {
-        timestamp: new Date().toLocaleTimeString(),
-        agent: agent,
-        message: message,
-        status: status || "success"
-    });
-    
-    res.sendStatus(200);
-});
-
-
-/**
- * Orchestrates the Muhafiz-X Graph execution and streams results via Socket.io
- */
-async function runMuhafizCascade(socket, payload) {
-    console.log('Running Muhafiz-X Cascade...');
     try {
-        const initialState = {
-            incident_id: `MHFZ-${Math.floor(Math.random() * 10000)}`,
-            signal: { 
-                raw_input: payload.signal || payload.raw_input || "No signal provided", 
-                sentiment: payload.sentiment || "urgent", 
-                language: payload.language || "roman-urdu" 
-            },
-            classification: {
-                location: { landmark: payload.location || "Unknown" }
-            },
-            traceLogs: [{
-                timestamp: new Date().toISOString(),
-                agent: "System",
-                message: `Cascade initialized via ${payload.source || 'Dashboard'}.`,
-                outcome: "Started"
-            }]
-        };
-
-        const stream = await muhafizGraph.stream(initialState);
-        
-        for await (const chunk of stream) {
-            const nodeName = Object.keys(chunk)[0];
-            const update = chunk[nodeName];
-
-            // 1. Stream Trace Logs for Terminal UI
-            if (update.traceLogs) {
-                update.traceLogs.forEach(log => {
-                    const traceData = {
-                        timestamp: new Date().toLocaleTimeString(),
-                        agent: log.agent,
-                        message: log.message,
-                        status: log.outcome === "Error" ? "error" : "success"
-                    };
-                    // Emit both for compatibility
-                    socket.emit('agent-log', log); 
-                    socket.emit('agent_trace', traceData);
-                    io.emit('agent_trace', traceData); // Broadcast globally as well
-                });
-            }
-
-
-            // 2. Stream Action Plans / Alerts for the Apps
-            if (update.action_plan || update.communication || update.simulation) {
-                socket.emit('app-update', {
-                    node: nodeName,
-                    data: update
-                });
-            }
+        const user = await findUserByNic(nic);
+        if (user && user.password === password) {
+            res.json({ success: true, user });
+        } else {
+            res.status(401).json({ success: false, error: "Identity Verification Failed" });
         }
+    } catch (error) {
+        res.status(500).json({ success: false, error: "Database Connection Error" });
+    }
+});
 
-        socket.emit('cascade-complete', { status: 'success' });
-        
+// --- INCIDENT TRACKING ---
+app.get('/api/incidents/:nic', async (req, res) => {
+    try {
+        const incidents = await sql`SELECT * FROM incidents ORDER BY created_at DESC LIMIT 20`;
+        res.json({ success: true, incidents });
+    } catch (error) {
+        res.status(500).json({ success: false, error: "Failed to fetch audit trails" });
+    }
+});
+
+// --- LIVE AREA PULSE ---
+app.get('/api/area/pulse/:sector', (req, res) => {
+    res.json({
+        sector: req.params.sector,
+        vitals: {
+            water_timing: "08:00 AM - 10:00 AM",
+            road_status: "Clear (Normal Traffic)",
+            electricity: "Stable",
+            security_level: "High (Active Patrol)"
+        }
+    });
+});
+
+// --- REPORT SUBMISSION (Triggers Agent Council) ---
+app.post('/api/report', async (req, res) => {
+    const { signal, metadata } = req.body;
+    console.log(`[Council] New Signal Received: "${signal}"`);
+    
+    try {
+        // Save to DB
+        const incident = await sql`
+            INSERT INTO incidents (description, status, last_agent) 
+            VALUES (${signal}, 'ANALYZING', 'SENTINEL')
+            RETURNING *
+        `;
+
+        // Trigger Async Agent Reasoning
+        runAgentCascade(signal, incident[0].id);
+
+        res.json({ success: true, incident: incident[0] });
+    } catch (error) {
+        console.error("Report Error:", error);
+        res.status(500).json({ success: false, error: "Council ingestion failed" });
+    }
+});
+
+// --- AGENT CASCADE LOGIC ---
+async function runAgentCascade(signal, incidentId) {
+    try {
+        const config = { configurable: { thread_id: `inc_${incidentId}` } };
+        const stream = await muhafizGraph.stream({
+            messages: [{ role: "user", content: signal }]
+        }, config);
+
+        for await (const chunk of stream) {
+            const agentName = Object.keys(chunk)[0];
+            const content = chunk[agentName];
+            
+            let message = "";
+            if (content.messages && content.messages.length > 0) {
+                message = content.messages[content.messages.length - 1].content;
+            }
+
+            // Stream to Mobile via Socket.io
+            io.emit('agent-log', {
+                timestamp: new Date().toISOString(),
+                agent: agentName,
+                message: message,
+                incidentId: incidentId
+            });
+            
+            console.log(`[Agent: ${agentName}] thinking...`);
+        }
     } catch (error) {
         console.error('Cascade error:', error);
-        socket.emit('agent-log', {
-            timestamp: new Date().toISOString(),
-            agent: "System",
-            message: `Error in cascade: ${error.message}`,
-            outcome: "Error"
-        });
     }
 }
 
-
 const PORT = process.env.PORT || 3001;
 httpServer.listen(PORT, () => {
-    console.log(`Muhafiz Backend running on port ${PORT}`);
-    console.log(`WebSocket server ready for agent traces`);
+    console.log(`=========================================`);
+    console.log(`Muhafiz-X Backend: REST + Socket.io Active`);
+    console.log(`Listening on port ${PORT}`);
+    console.log(`=========================================`);
 });

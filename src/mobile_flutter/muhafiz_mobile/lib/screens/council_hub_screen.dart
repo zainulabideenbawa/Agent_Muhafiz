@@ -1,329 +1,174 @@
 import 'package:flutter/material.dart';
+import 'package:animate_do/animate_do.dart';
+
+import '../services/api_service.dart';
+import '../widgets/feedback_widgets.dart';
 import '../theme/theme.dart';
 
-class CouncilHubScreen extends StatelessWidget {
-  const CouncilHubScreen({super.key});
+
+class CouncilHubScreen extends StatefulWidget {
+  final Map<String, dynamic>? user;
+  const CouncilHubScreen({super.key, this.user});
+
+  @override
+  State<CouncilHubScreen> createState() => _CouncilHubScreenState();
+}
+
+class _CouncilHubScreenState extends State<CouncilHubScreen> {
+  List<dynamic> incidents = [];
+  bool isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchIncidents();
+  }
+
+  void _fetchIncidents() async {
+    final nic = widget.user?['nic_number'] ?? 'global';
+    final response = await ApiService.get('/incidents/$nic');
+    
+    if (response['success']) {
+      setState(() {
+        incidents = response['data']['incidents'] ?? [];
+        isLoading = false;
+      });
+    } else {
+      setState(() => isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: MuhafizTheme.darkBg,
       body: SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Padding(
-                padding: EdgeInsets.all(24.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Council Hub',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(24.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('COUNCIL HUB', style: TextStyle(color: MuhafizTheme.emerald400, letterSpacing: 2, fontSize: 12, fontWeight: FontWeight.bold)),
+                  SizedBox(height: 8),
+                  Text('Active Audit Trails', style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
+                ],
+              ),
+            ),
+            
+            Expanded(
+              child: isLoading 
+                ? const Center(child: CircularProgressIndicator(color: MuhafizTheme.emerald500))
+                : incidents.isEmpty 
+                  ? _EmptyState()
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      itemCount: incidents.length,
+                      itemBuilder: (context, index) => FadeInUp(
+                        delay: Duration(milliseconds: index * 100),
+                        child: _IncidentCard(incident: incidents[index]),
                       ),
                     ),
-                    Text(
-                      'Services & Governance',
-                      style: TextStyle(color: MuhafizTheme.emerald400, fontSize: 16),
-                    ),
-                  ],
-                ),
-              ),
 
-              // Events
-              const _SectionTitle(title: 'City Pulse: Verified Events'),
-              SizedBox(
-                height: 220,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  children: const [
-                    _EventCard(
-                      title: 'Flower Show',
-                      location: 'Frere Hall',
-                      date: 'May 18',
-                      emoji: '🌸',
-                    ),
-                    _EventCard(
-                      title: 'Dengue Spray Drive',
-                      location: 'Gulshan Sector',
-                      date: 'May 19',
-                      emoji: '🦟',
-                      priority: true,
-                    ),
-                  ],
-                ),
-              ),
-
-              // Booking Grid
-              const SizedBox(height: 32),
-              const _SectionTitle(title: 'Book Government Facilities'),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: GridView.count(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 16,
-                  crossAxisSpacing: 16,
-                  childAspectRatio: 1.2,
-                  children: const [
-                    _BookingTile(icon: '🏛️', label: 'Community Center'),
-                    _BookingTile(icon: '⚽', label: 'Sports Ground'),
-                    _BookingTile(icon: '🚛', label: 'Water Tanker', active: true),
-                    _BookingTile(icon: '🚑', label: 'Emergency Health'),
-                  ],
-                ),
-              ),
-
-              // Quick Booking
-              const SizedBox(height: 32),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: MuhafizTheme.darkCard,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: MuhafizTheme.darkBorder),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Request Water Tanker',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _PickerStub(label: 'Select Date', value: 'May 16, 2026'),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: _PickerStub(label: 'Slot', value: '10 AM - 2 PM'),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 24),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 50,
-                        child: ElevatedButton(
-                          onPressed: () {},
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: MuhafizTheme.emerald600,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                          child: const Text(
-                            'Confirm Booking',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 40),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _SectionTitle extends StatelessWidget {
-  final String title;
-  const _SectionTitle({required this.title});
+class _IncidentCard extends StatelessWidget {
+  final Map<String, dynamic> incident;
+  const _IncidentCard({required this.incident});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      child: Text(
-        title.toUpperCase(),
-        style: const TextStyle(
-          color: MuhafizTheme.darkTextMuted,
-          fontSize: 12,
-          letterSpacing: 1.5,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
-  }
-}
-
-class _EventCard extends StatelessWidget {
-  final String title;
-  final String location;
-  final String date;
-  final String emoji;
-  final bool priority;
-
-  const _EventCard({
-    required this.title,
-    required this.location,
-    required this.date,
-    required this.emoji,
-    this.priority = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
+    final status = incident['status'] ?? 'ANALYZING';
+    final isResolved = status == 'RESOLVED';
+    
     return Container(
-      width: 260,
-      margin: const EdgeInsets.only(right: 16),
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: MuhafizTheme.darkCard,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: priority ? MuhafizTheme.emerald500 : MuhafizTheme.darkBorder,
-        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: MuhafizTheme.darkBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            height: 120,
-            width: double.infinity,
-            decoration: const BoxDecoration(
-              color: MuhafizTheme.emerald950,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-            ),
-            child: Center(
-              child: Text(emoji, style: const TextStyle(fontSize: 50)),
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('ID: ${incident['id'].toString().substring(0, 8)}', style: const TextStyle(color: MuhafizTheme.darkTextMuted, fontSize: 10, fontFamily: 'JetBrains Mono')),
+              _StatusChip(status: status, isResolved: isResolved),
+            ],
           ),
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                ),
-                Text(
-                  location,
-                  style: const TextStyle(color: MuhafizTheme.darkTextMuted, fontSize: 12),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      date,
-                      style: const TextStyle(
-                        color: MuhafizTheme.emerald400,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: MuhafizTheme.emerald500.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: const Text(
-                        '✓ Truth-Engine',
-                        style: TextStyle(
-                          color: MuhafizTheme.emerald400,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+          const SizedBox(height: 12),
+          Text(incident['description'] ?? 'Crisis Report', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          Text(
+            'LAST ACTION: ${incident['last_agent'] ?? 'SENTINEL'} Verified Signal',
+            style: const TextStyle(color: MuhafizTheme.emerald400, fontSize: 10),
+          ),
+          const Divider(color: MuhafizTheme.darkBorder, height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                _formatDate(incident['created_at']),
+                style: const TextStyle(color: MuhafizTheme.darkTextMuted, fontSize: 10),
+              ),
+              const Icon(Icons.arrow_forward_ios, color: MuhafizTheme.darkTextMuted, size: 12),
+            ],
           ),
         ],
       ),
     );
   }
+
+  String _formatDate(String? date) {
+    if (date == null) return "Just now";
+    return date.split('T')[0];
+  }
 }
 
-class _BookingTile extends StatelessWidget {
-  final String icon;
-  final String label;
-  final bool active;
-
-  const _BookingTile({required this.icon, required this.label, this.active = false});
+class _StatusChip extends StatelessWidget {
+  final String status;
+  final bool isResolved;
+  const _StatusChip({required this.status, required this.isResolved});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: MuhafizTheme.darkCard,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: active ? MuhafizTheme.emerald500 : MuhafizTheme.darkBorder,
-        ),
+        color: isResolved ? MuhafizTheme.emerald500.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
       ),
-      child: Stack(
-        children: [
-          Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(icon, style: const TextStyle(fontSize: 24)),
-                const SizedBox(height: 8),
-                Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-          ),
-          if (active)
-            const Positioned(
-              top: 0,
-              right: 0,
-              child: CircleAvatar(radius: 3, backgroundColor: MuhafizTheme.emerald500),
-            ),
-        ],
+      child: Text(
+        status.toUpperCase(),
+        style: TextStyle(color: isResolved ? MuhafizTheme.emerald500 : Colors.orange, fontSize: 10, fontWeight: FontWeight.bold),
       ),
     );
   }
 }
 
-class _PickerStub extends StatelessWidget {
-  final String label;
-  final String value;
-  const _PickerStub({required this.label, required this.value});
-
+class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label.toUpperCase(),
-          style: const TextStyle(color: MuhafizTheme.darkTextMuted, fontSize: 10),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
-        ),
-      ],
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.assignment_outlined, color: MuhafizTheme.darkTextMuted.withOpacity(0.2), size: 80),
+          const SizedBox(height: 16),
+          const Text('No Active Reports', style: TextStyle(color: MuhafizTheme.darkTextMuted)),
+        ],
+      ),
     );
   }
 }
