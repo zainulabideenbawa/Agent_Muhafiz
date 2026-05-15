@@ -1,9 +1,12 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 
 class AuthService {
-  // Use your computer's IP if testing on a real device
-  static const String baseUrl = 'http://localhost:3001/api/auth';
+  // 10.0.2.2 is the special alias for localhost in Android Emulators
+  static final String baseUrl = Platform.isAndroid 
+    ? 'http://10.0.2.2:3001/api/auth' 
+    : 'http://localhost:3001/api/auth';
 
   static Future<Map<String, dynamic>> signup({
     required String nic,

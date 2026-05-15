@@ -1,19 +1,34 @@
+import { neon } from '@neondatabase/serverless';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+export const sql = neon(process.env.DATABASE_URL);
+
+
 export const initDb = async () => {
     try {
+        if (!process.env.DATABASE_URL) {
+            console.warn("⚠️ DATABASE_URL not found. Neon DB integration disabled.");
+            return;
+        }
+
         console.log("Initializing Neon DB tables...");
+        // Reset incidents table for clean schema (Dev Mode)
+        await sql`DROP TABLE IF EXISTS incidents`;
+
         // Incidents Table
         await sql`
-            CREATE TABLE IF NOT EXISTS incidents (
+            CREATE TABLE incidents (
                 id SERIAL PRIMARY KEY,
-                incident_id TEXT UNIQUE NOT NULL,
-                location TEXT,
-                type TEXT,
-                severity TEXT,
-                status TEXT,
-                data JSONB,
+                description TEXT,
+                status TEXT DEFAULT 'ANALYZING',
+                last_agent TEXT DEFAULT 'SENTINEL',
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             )
         `;
+
+
         // Users Table for Auth
         await sql`
             CREATE TABLE IF NOT EXISTS users (

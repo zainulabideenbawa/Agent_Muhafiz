@@ -60,4 +60,19 @@ class MuhafizTheme {
       ),
     ),
   );
+
+  static InputDecoration inputDecoration(String label) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: const TextStyle(color: darkTextMuted, fontSize: 12),
+      filled: true,
+      fillColor: darkCard,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: darkBorder)),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: emerald500)),
+      errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Colors.redAccent)),
+      errorStyle: const TextStyle(color: Colors.redAccent, fontSize: 10),
+    );
+  }
 }
+
