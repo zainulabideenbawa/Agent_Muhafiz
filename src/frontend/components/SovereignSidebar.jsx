@@ -13,7 +13,7 @@ const SovereignSidebar = ({ activeDept, setDept }) => {
         'RESCUE_1122': { name: 'Rescue 1122', color: 'text-red-500', bg: 'bg-red-500/10' }
     };
 
-    const currentDept = departments[activeDept];
+    const currentDept = departments[activeDept] || { name: 'Sovereign Unit', color: 'text-zinc-500', bg: 'bg-zinc-500/10' };
 
     useEffect(() => {
         fetchHubs();

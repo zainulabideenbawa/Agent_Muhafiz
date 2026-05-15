@@ -102,6 +102,7 @@ app.post('/api/trigger-crisis', async (req, res) => {
             
             if (stateUpdate && stateUpdate.traceLogs && stateUpdate.traceLogs.length > 0) {
                 const latestLog = stateUpdate.traceLogs[stateUpdate.traceLogs.length - 1];
+                console.log(`[Broadcast] Trace for ${assignedDept || 'System'}: ${latestLog.agent}`);
                 broadcast({
                     type: 'TRACE_LOG',
                     incidentId,
