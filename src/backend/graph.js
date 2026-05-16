@@ -1,4 +1,7 @@
 import { START, END, StateGraph } from "@langchain/langgraph";
+import { config } from 'dotenv';
+config();
+
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
 import { get_city_vitals, get_resource_status, run_impact_simulation } from "./tools.js";
 import { saveIncident } from "./db.js";
@@ -76,6 +79,7 @@ workflow.addNode("TheSentinel", async (state) => {
 
     return { 
         incident_id: `MHFZ-${Date.now().toString().slice(-4)}`,
+        signal: { source: isSocial ? 'SOCIAL' : 'APP' },
         classification: result.is_crisis ? { type: result.type, location: { landmark: result.location }, urgency: result.urgency } : {},
         traceLogs: [log] 
     };
@@ -157,38 +161,37 @@ workflow.addNode("TheAnalyst", async (state) => {
 workflow.addNode("TheStrategist", async (state) => {
     const resources = await get_resource_status(state.assigned_department);
     
-    const systemPrompt = `You are the Master Commander for ${state.assigned_department}.
-    Inventory (Hub-based): ${JSON.stringify(resources.hubs)}
-    Impact: ${JSON.stringify(state.impact_analysis)}
+    const prompt = `You are the Sovereign Strategist for ${state.assigned_department}.
+    LOCATION: ${state.classification?.location?.landmark}
+    AVAILABLE FLEET: ${JSON.stringify(resources.hubs)}
+    VERIFIED TRUTH: ${JSON.stringify(state.truth_analysis)}
     
-    Logic:
-    - DISPATCH: Select units from the HUB closest to ${state.classification?.location?.landmark}.
-    - PRIORITY: (Severity * PopulationDensity) / Distance.
-    - Output ONLY JSON: action_plan {priority_score, assigned_hub, assigned_resources, field_instructions}.`;
+    Task:
+    1. Select the exact HUB for deployment.
+    2. Specify units (e.g., Heavy Tanker, Life-Support Ambulance).
+    3. Calculate ETA based on traffic (${state.truth_analysis?.confidence}% sensor accuracy).
+    4. Provide a 'Tactical Directive' for field staff (including traffic diversions).
+    
+    Respond in JSON: {
+        "priority_level": "CRITICAL" | "STANDARD",
+        "deployment": { "hub": "string", "units": ["string"], "eta_mins": number },
+        "tactical_directive": "string",
+        "inter_agency_coordination": "string"
+    }`;
 
-    let result;
-    try {
-        const response = await proModel.invoke([
-            ["system", systemPrompt],
-            ["user", "Create a hub-based tactical deployment plan."]
-        ]);
-        result = JSON.parse(response.content.replace(/```json|```/g, "").trim());
-    } catch (e) {
-        console.warn("[Strategist] LLM Failed, using fallback.");
-        const hub = resources.hubs?.[0] || { id: 'FALLBACK', name: 'Central Station' };
-        result = { action_plan: { priority_score: 9.5, assigned_hub: hub.name, assigned_resources: ["TRUCK-1", "OFFICER-4"], field_instructions: "Deploy from nearest hub." } };
-    }
+    const response = await proModel.invoke([["user", prompt]]);
+    const result = JSON.parse(response.content.replace(/```json|```/g, "").trim());
     
     const log = {
         timestamp: new Date().toISOString(),
         agent: "The Strategist",
-        message: `Plan created for ${state.assigned_department}. Deploying from: ${result.action_plan?.assigned_hub || "Central Hub"}. Units: ${Array.isArray(result.action_plan?.assigned_resources) ? result.action_plan.assigned_resources.join(", ") : "Rapid Response"}.`,
-        outcome: "Draft Plan Created"
+        message: `TACTICAL DIRECTIVE: ${result.deployment.units.join(", ")} dispatched from ${result.deployment.hub}. ETA: ${result.deployment.eta_mins} mins. ${result.tactical_directive}`,
+        outcome: "Plan Locked"
     };
 
-    return {
-        action_plan: result.action_plan,
-        traceLogs: [log]
+    return { 
+        action_plan: result,
+        traceLogs: [log] 
     };
 });
 
@@ -228,95 +231,129 @@ workflow.addNode("TheOracle", async (state) => {
 
 // Agent #6: The Communicator (The Voice)
 workflow.addNode("TheCommunicator", async (state) => {
-    const systemPrompt = `You are the Voice of Muhafiz-X. Generate bilingual alerts.
-    Plan: ${JSON.stringify(state.action_plan)}
-    Output ONLY JSON for: communication {public_alert_urdu, public_alert_english, official_briefing, field_dispatch}.`;
+    const { classification } = state;
+    const isMajor = (classification.urgency || 5) > 7;
+    
+    const systemPrompt = `You are the Voice of Muhafiz-X. Generate multi-channel bilingual alerts.
+    Task:
+    1. Scope: Decide if this is LOCAL (within 5km) or GLOBAL (City-wide).
+    2. Citizen App Push: Create a short notification for the mobile app (Free channel).
+    3. WhatsApp Broadcast: Create a detailed update for the Official Govt Channel (Free channel).
+    4. Bilingual: Provide English and Urdu versions.
+    
+    Output ONLY JSON: {
+        "scope": "LOCAL" | "GLOBAL",
+        "radius_km": number,
+        "push_notification": { "en": "string", "ur": "string" },
+        "whatsapp_draft": { "en": "string", "ur": "string" },
+        "mayor_brief": "string"
+    }`;
 
     let result;
     try {
         const response = await flashModel.invoke([
             ["system", systemPrompt],
-            ["user", "Generate messages."]
+            ["user", `Crisis: ${classification.type} at ${classification.location?.landmark}`]
         ]);
         result = JSON.parse(response.content.replace(/```json|```/g, "").trim());
     } catch (e) {
         console.warn("[Communicator] LLM Failed, using fallback.");
-        result = { communication: { public_alert_urdu: "NIPA Chowrangi par paani hai.", public_alert_english: "Flood at NIPA.", official_briefing: "MHFZ-001 active.", field_dispatch: "Respond now." } };
+        result = {
+            scope: "LOCAL",
+            radius_km: 5,
+            push_notification: { en: "Emergency near you.", ur: "Aapke qareeb hangami surat-e-haal." },
+            whatsapp_draft: { en: "Detailed emergency info.", ur: "Hangami surat-e-haal ki tafseelat." },
+            mayor_brief: "Mayor, please review the Saddar fire report."
+        };
     }
     
     const log = {
         timestamp: new Date().toISOString(),
         agent: "The Communicator",
-        message: `Multi-channel alerts generated in Urdu/English.`,
+        message: `Alert Scoped as ${result.scope} (${result.radius_km}km). Push and WhatsApp drafts ready.`,
         outcome: "Success"
     };
 
     return {
-        communication: result.communication,
+        communication: result,
         traceLogs: [log]
     };
 });
 
-// Agent #7: The Auditor (Recovery & Truth)
+// Agent #7: The Auditor (Post-Mission Logic & Learning)
 workflow.addNode("TheAuditor", async (state) => {
-    const systemPrompt = `You are the Final Judge. Check if crisis is resolved.
-    History: ${JSON.stringify(state.traceLogs)}
-    Output ONLY JSON for: audit_trail {field_verification, retraction_triggered} and outcome (Crisis Resolved/Active Crisis).`;
+    const { action_plan, truth_analysis } = state;
+    
+    const prompt = `You are the Sovereign Auditor. The mission at ${state.classification.location.landmark} is complete.
+    
+    Task:
+    1. Verify if the crisis is RESOLVED.
+    2. Analyze performance (ETA vs Traffic).
+    3. Suggest one LONG-TERM Policy/Infrastructure fix for the city to prevent this or improve response.
+    
+    Respond in JSON: {
+        "status": "RESOLVED" | "ACTIVE",
+        "performance_score": number,
+        "policy_recommendation": "string",
+        "learning_log": "string"
+    }`;
 
-    let result;
-    try {
-        const response = await proModel.invoke([
-            ["system", systemPrompt],
-            ["user", "Perform final audit."]
-        ]);
-        result = JSON.parse(response.content.replace(/```json|```/g, "").trim());
-    } catch (e) {
-        console.warn("[Auditor] LLM Failed, using fallback.");
-        result = { audit_trail: { field_verification: "verified", retraction_triggered: true }, outcome: "Crisis Resolved" };
-    }
+    const response = await flashModel.invoke([["user", prompt]]);
+    const result = JSON.parse(response.content.replace(/```json|```/g, "").trim());
     
     const log = {
         timestamp: new Date().toISOString(),
         agent: "The Auditor",
-        message: `Audit complete. Resolution status: ${result.outcome}.`,
-        outcome: result.outcome
+        message: `Mission ${result.status}. Performance: ${result.performance_score}%. Policy: ${result.policy_recommendation}`,
+        outcome: result.status === "RESOLVED" ? "Crisis Resolved" : "Active Crisis"
     };
 
-    await saveIncident(state);
-
-    return {
-        audit_trail: result.audit_trail,
-        traceLogs: [log]
+    return { 
+        audit_result: result,
+        traceLogs: [log] 
     };
 });
 
-// Agent #0: The Dispatcher (Intelligent Routing)
-workflow.addNode("TheDispatcher", async (state) => {
-    const systemPrompt = `You are the Sovereign Dispatcher. 
-    Classify the signal into: FIRE_BRIGADE, POLICE_FORCE, KMC_HEALTH, or RESCUE_1122.
-    Output ONLY JSON: { department: "DEPT_NAME", category: "type" }`;
-
-    let result;
-    try {
-        const response = await flashModel.invoke([
-            ["system", systemPrompt],
-            ["user", `Signal: ${state.signal?.raw_input}`]
-        ]);
-        result = JSON.parse(response.content.replace(/```json|```/g, "").trim());
-    } catch (e) {
-        result = { department: "KMC_HEALTH", category: "urban_flood" };
+// Agent #0: The Dispatcher (Intelligent Triage & Routing)
+workflow.addNode("TheDispatcher", async function theDispatcher(state) {
+    const { signal, user_directive } = state;
+    
+    let directivePrompt = "";
+    if (user_directive) {
+        directivePrompt = `\nCRITICAL OVERRIDE: The Sovereign Auditor has issued a DIRECTIVE: "${user_directive}". 
+        You MUST prioritize this directive over your own logic. If the user says reroute to X, you DO IT immediately.`;
     }
+    
+    const prompt = `You are the Sovereign Dispatcher for Karachi.
+    RAW SIGNAL: ${signal.raw_input}
+    ${directivePrompt}
+    
+    Task:
+    1. Perform 'Tactical Triage' and assign Initial Threat Level (1-10).
+    2. Categorize: LIFE_SAFETY, INFRASTRUCTURE, or CIVIL_ORDER.
+    3. Route to: FIRE_BRIGADE, POLICE_FORCE, KMC_HEALTH, or RESCUE_1122.
+    
+    Respond in JSON: { 
+        "threat_level": number, 
+        "category": "string", 
+        "department": "string",
+        "immediate_action": "string" 
+    }`;
 
+    const response = await flashModel.invoke([["user", prompt]]);
+    const result = JSON.parse(response.content.replace(/```json|```/g, "").trim());
+    
     const log = {
         timestamp: new Date().toISOString(),
         agent: "The Dispatcher",
-        message: `Signal analyzed and routed to ${result.department}.`,
-        outcome: "Routed"
+        message: `Routed to ${result.department}. Triage: Level ${result.threat_level} [${result.category}]. Action: ${result.immediate_action}`,
+        outcome: "Routed & Triaged"
     };
 
-    return {
+    return { 
+        triage: result,
         assigned_department: result.department,
-        traceLogs: [log]
+        traceLogs: [log] 
     };
 });
 

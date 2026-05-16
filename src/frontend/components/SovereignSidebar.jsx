@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Truck, Users, LayoutDashboard, Settings, User, Save, Plus, MapPin, Trash2 } from 'lucide-react';
+import { Shield, Truck, Users, LayoutDashboard, Settings, User, Save, Plus, MapPin, Trash2, Terminal, Send, TrendingUp, Megaphone, ClipboardList, Cpu } from 'lucide-react';
 
-const SovereignSidebar = ({ activeDept, setDept }) => {
-    const [view, setView] = useState('dashboard');
+const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, setDashboardView, user }) => {
     const [hubs, setHubs] = useState([]);
     const [isSaving, setIsSaving] = useState(false);
 
@@ -23,7 +22,13 @@ const SovereignSidebar = ({ activeDept, setDept }) => {
         try {
             const res = await fetch(`http://localhost:3001/api/department-resources/${activeDept}`);
             const data = await res.json();
-            setHubs(data);
+            const hubList = Array.isArray(data) ? data : (data.hubs || []);
+            
+            if (user.role === 'DEPT_ADMIN' && activeDept !== user.department) {
+                setHubs([]);
+            } else {
+                setHubs(hubList);
+            }
         } catch (e) { console.error("Failed to fetch hubs"); }
     };
 
@@ -50,9 +55,9 @@ const SovereignSidebar = ({ activeDept, setDept }) => {
     };
 
     return (
-        <div className="w-72 h-full bg-[#09090b] border-r border-zinc-800 flex flex-col">
-            {/* Department Identity Header */}
-            <div className="p-6 border-b border-zinc-800">
+        <div className="w-72 h-full bg-black/10 backdrop-blur-3xl border-r border-white/5 flex flex-col shadow-2xl relative overflow-hidden z-50">
+            {/* Header / Dept Selector */}
+            <div className="p-6 border-b border-white/5 bg-white/[0.01]">
                 <div className="flex items-center gap-3 mb-6 p-3 rounded-xl bg-zinc-900/50 border border-zinc-800">
                     <div className={`p-2 rounded-lg ${currentDept.bg} ${currentDept.color}`}>
                         <Shield size={20} />
@@ -63,22 +68,70 @@ const SovereignSidebar = ({ activeDept, setDept }) => {
                     </div>
                 </div>
 
-                <nav className="space-y-1">
+                <nav className="flex flex-col gap-1.5">
+                    <span className="text-[8px] font-black text-zinc-600 uppercase tracking-[0.3em] mb-2 ml-2">Main Stage</span>
                     <button 
-                        onClick={() => setView('dashboard')}
-                        className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-medium rounded-lg transition-all ${
-                            view === 'dashboard' ? 'text-emerald-500 bg-emerald-500/10' : 'text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800'
-                        }`}
+                        onClick={() => { setDashboardView('TACTICAL'); setView('dashboard'); }}
+                        className={`flex items-center justify-between px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${dashboardView === 'TACTICAL' && view === 'dashboard' ? 'bg-white text-black shadow-xl' : 'text-zinc-500 hover:bg-white/5'}`}
                     >
-                        <LayoutDashboard size={16} /> Incident Grid
+                        <div className="flex items-center gap-3">
+                            <LayoutDashboard size={14} /> Tactical Grid
+                        </div>
+                        {dashboardView === 'TACTICAL' && view === 'dashboard' && <div className="w-1.5 h-1.5 rounded-full bg-black animate-pulse" />}
+                    </button>
+                    <button 
+                        onClick={() => { setDashboardView('STRATEGIC'); setView('dashboard'); }}
+                        className={`flex items-center justify-between px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${dashboardView === 'STRATEGIC' ? 'bg-white text-black shadow-xl' : 'text-zinc-500 hover:bg-white/5'}`}
+                    >
+                        <div className="flex items-center gap-3">
+                            <TrendingUp size={14} /> Strategic Audit
+                        </div>
+                        {dashboardView === 'STRATEGIC' && <div className="w-1.5 h-1.5 rounded-full bg-black animate-pulse" />}
+                    </button>
+                    <button 
+                        onClick={() => { setDashboardView('MISSIONS'); setView('dashboard'); }}
+                        className={`flex items-center justify-between px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${dashboardView === 'MISSIONS' ? 'bg-white text-black shadow-xl' : 'text-zinc-500 hover:bg-white/5'}`}
+                    >
+                        <div className="flex items-center gap-3">
+                            <ClipboardList size={14} /> Mission Board
+                        </div>
+                        {dashboardView === 'MISSIONS' && <div className="w-1.5 h-1.5 rounded-full bg-black animate-pulse" />}
+                    </button>
+                    {user.role === 'SUPER_ADMIN' && (
+                        <button 
+                            onClick={() => { setDashboardView('ADMIN'); setView('dashboard'); }}
+                            className={`flex items-center justify-between px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${dashboardView === 'ADMIN' ? 'bg-orange-500/20 text-orange-500 border border-orange-500/30' : 'text-zinc-500 hover:bg-white/5'}`}
+                        >
+                            <div className="flex items-center gap-3">
+                                <Cpu size={14} /> Urban Optimization
+                            </div>
+                            {dashboardView === 'ADMIN' && <div className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />}
+                        </button>
+                    )}
+                    <button 
+                        onClick={() => { setDashboardView('BROADCAST'); setView('dashboard'); }}
+                        className={`flex items-center justify-between px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${dashboardView === 'BROADCAST' ? 'bg-white text-black shadow-xl' : 'text-zinc-500 hover:bg-white/5'}`}
+                    >
+                        <div className="flex items-center gap-3">
+                            <Megaphone size={14} /> Public Alerts
+                        </div>
+                        {dashboardView === 'BROADCAST' && <div className="w-1.5 h-1.5 rounded-full bg-black animate-pulse" />}
+                    </button>
+
+                    <div className="my-4 h-px bg-white/5" />
+                    
+                    <span className="text-[8px] font-black text-zinc-600 uppercase tracking-[0.3em] mb-2 ml-2">Agency Tools</span>
+                    <button 
+                        onClick={() => setView('guidance')}
+                        className={`flex items-center gap-3 px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === 'guidance' ? 'bg-emerald-600/20 text-emerald-500 border border-emerald-500/30' : 'text-zinc-500 hover:bg-white/5'}`}
+                    >
+                        <Terminal size={14} /> Command Override
                     </button>
                     <button 
                         onClick={() => setView('manage')}
-                        className={`w-full flex items-center gap-3 px-3 py-2 text-xs font-medium rounded-lg transition-all ${
-                            view === 'manage' ? 'text-blue-500 bg-blue-500/10' : 'text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800'
-                        }`}
+                        className={`flex items-center gap-3 px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === 'manage' ? 'bg-blue-600/20 text-blue-500 border border-blue-500/30' : 'text-zinc-500 hover:bg-white/5'}`}
                     >
-                        <Settings size={16} /> Asset Management
+                        <Settings size={14} /> Fleet Management
                     </button>
                 </nav>
             </div>
@@ -107,6 +160,58 @@ const SovereignSidebar = ({ activeDept, setDept }) => {
                                     </div>
                                 </div>
                             ))}
+                        </div>
+                    </div>
+                ) : view === 'guidance' ? (
+                    <div className="flex-1 flex flex-col h-full overflow-hidden">
+                        <div className="flex items-center gap-3 mb-6">
+                            <Terminal className="text-emerald-500" size={16} />
+                            <h3 className="text-white text-xs font-black uppercase tracking-widest">Command Override</h3>
+                        </div>
+
+                        {/* Active Directives Log */}
+                        <div className="flex-1 bg-black/40 border border-white/5 rounded-2xl p-4 mb-6 overflow-y-auto space-y-4 custom-scrollbar">
+                            <span className="text-[8px] font-black text-zinc-700 uppercase tracking-widest block mb-2">Active Directives</span>
+                            <div className="p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-lg">
+                                <p className="text-[10px] text-emerald-500/80 leading-relaxed font-mono">
+                                    &gt; MANUAL_OVERRIDE: Prioritize Sector-7 rescue missions.
+                                </p>
+                                <span className="text-[8px] text-zinc-600 uppercase mt-1 block">Awaiting Dispatcher ACK...</span>
+                            </div>
+                        </div>
+
+                        {/* Directive Input */}
+                        <div className="space-y-4">
+                            <div className="relative">
+                                <textarea 
+                                    id="directive_input"
+                                    placeholder="Enter Sovereign Directive..."
+                                    className="w-full bg-zinc-900/50 border border-white/10 rounded-xl p-4 text-[11px] text-zinc-300 font-mono outline-none focus:border-emerald-500/50 transition-all h-24"
+                                />
+                                <div className="absolute bottom-3 right-3 flex items-center gap-2">
+                                    <span className="text-[8px] font-black text-zinc-700 uppercase">DIRECT_LINK_ACTIVE</span>
+                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                </div>
+                            </div>
+                            <button 
+                                onClick={async () => {
+                                    const input = document.getElementById('directive_input');
+                                    const directive = input.value;
+                                    if (!directive) return;
+                                    try {
+                                        await fetch('http://localhost:3001/api/agent-directive', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ directive })
+                                        });
+                                        input.value = '';
+                                        alert("Sovereign Directive Committed to Brain.");
+                                    } catch (e) { console.error(e); }
+                                }}
+                                className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-emerald-900/20 flex items-center justify-center gap-2"
+                            >
+                                <Send size={14} /> Commit Directive
+                            </button>
                         </div>
                     </div>
                 ) : (
@@ -157,9 +262,10 @@ const SovereignSidebar = ({ activeDept, setDept }) => {
             {/* Profile Switcher (Simulated) */}
             <div className="p-4 bg-black/40 border-t border-zinc-800">
                  <select 
+                    disabled={user.role === 'DEPT_ADMIN'}
                     value={activeDept}
                     onChange={(e) => setDept(e.target.value)}
-                    className="w-full bg-zinc-900 border border-zinc-800 text-[9px] text-zinc-500 font-bold p-2 rounded-lg outline-none uppercase tracking-tighter"
+                    className="w-full bg-zinc-900 border border-zinc-800 text-[9px] text-zinc-500 font-bold p-2 rounded-lg outline-none uppercase tracking-tighter disabled:opacity-50"
                  >
                     {Object.keys(departments).map(id => (
                         <option key={id} value={id}>{departments[id].name}</option>

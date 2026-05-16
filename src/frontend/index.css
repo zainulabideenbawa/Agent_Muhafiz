@@ -3,6 +3,25 @@
 
 @layer base {
   body {
-    @apply bg-muhafiz-bg text-white;
+    margin: 0;
+    padding: 0;
+    background-color: #0c0c0e;
+    color: #fafafa;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    overflow: hidden;
+  }
+
+  /* Sovereign Mesh Background */
+  .sovereign-bg {
+    background-color: #0c0c0e;
+    background-image: 
+      radial-gradient(at 0% 0%, hsla(220, 100%, 10%, 0.5) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, hsla(160, 100%, 10%, 0.3) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, hsla(20, 100%, 10%, 0.2) 0px, transparent 50%),
+      radial-gradient(at 0% 100%, hsla(220, 100%, 10%, 0.4) 0px, transparent 50%);
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
   }
 }
