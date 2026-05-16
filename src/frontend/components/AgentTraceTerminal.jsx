@@ -16,7 +16,7 @@ const AgentTraceTerminal = ({ traces = [] }) => {
     return (
         <div className="h-full flex flex-col bg-transparent">
             {/* Sidebar Header */}
-            <div className="p-6 border-b border-white/5">
+            <div className="p-6 border-b border-white/5 bg-white/[0.01]">
                 <div className="flex items-center gap-3 mb-2">
                     <div className="p-2 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
                         <Activity className="text-emerald-500" size={18} />
@@ -50,7 +50,7 @@ const AgentTraceTerminal = ({ traces = [] }) => {
             </div>
 
             {/* Agent Sovereign Grid Health */}
-            <div className="p-4 bg-black/60 border-t border-white/5 backdrop-blur-xl">
+            <div className="p-4 bg-white/[0.01] border-t border-white/5 backdrop-blur-xl">
                 <div className="flex justify-between items-center mb-3">
                     <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">Sovereign Brain Health</span>
                     <span className="text-[8px] font-mono text-emerald-500">8/8 AGENTS_ONLINE</span>
@@ -111,15 +111,26 @@ const IncidentTrack = ({ incident }) => {
 
             {/* Performance Analytics (Visible when resolved) */}
             {isComplete && (
-                <div className="mb-4 grid grid-cols-2 gap-2 p-2 bg-black/40 rounded-lg border border-white/5">
-                    <div>
-                        <p className="text-[7px] text-zinc-500 uppercase font-black">Accuracy</p>
-                        <p className="text-[10px] text-emerald-500 font-mono">98.4%</p>
+                <div className="mb-4 space-y-2">
+                    <div className="grid grid-cols-2 gap-2 p-2 bg-black/40 rounded-lg border border-white/5">
+                        <div>
+                            <p className="text-[7px] text-zinc-500 uppercase font-black">Resolution Score</p>
+                            <p className="text-[10px] text-emerald-500 font-mono">98.4%</p>
+                        </div>
+                        <div>
+                            <p className="text-[7px] text-zinc-500 uppercase font-black">Audit Status</p>
+                            <p className="text-[10px] text-zinc-300 font-mono">Verified</p>
+                        </div>
                     </div>
-                    <div>
-                        <p className="text-[7px] text-zinc-500 uppercase font-black">Response</p>
-                        <p className="text-[10px] text-zinc-300 font-mono">24s</p>
-                    </div>
+                    {latestLog.policy_recommendation && (
+                        <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl relative overflow-hidden group">
+                            <div className="absolute top-0 right-0 p-2 opacity-10">
+                                <Globe size={24} className="text-blue-500" />
+                            </div>
+                            <span className="text-[8px] font-black text-blue-500 uppercase tracking-widest block mb-1">Sovereign Policy Advisory</span>
+                            <p className="text-[10px] text-blue-100/80 leading-relaxed font-medium italic">"{latestLog.policy_recommendation}"</p>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -129,7 +140,7 @@ const IncidentTrack = ({ incident }) => {
                 {incident.logs.map((log, idx) => (
                     <div key={idx} className="flex gap-4 relative animate-in slide-in-from-right-4 duration-300">
                         <div className={`z-10 w-6 h-6 rounded-full flex items-center justify-center border transition-colors ${
-                            log.outcome === 'Success' || log.outcome === 'Verified' || log.outcome === 'Approved' || log.outcome === 'Crisis Resolved'
+                            log.outcome === 'Success' || log.outcome === 'Verified' || log.outcome === 'Approved' || log.outcome === 'Crisis Resolved' || log.outcome === 'Coordination Locked'
                             ? 'bg-emerald-500 border-emerald-400 text-black shadow-[0_0_8px_rgba(16,185,129,0.4)]'
                             : 'bg-zinc-900 border-zinc-700 text-zinc-500'
                         }`}>
@@ -138,6 +149,9 @@ const IncidentTrack = ({ incident }) => {
                         <div className="flex-1 min-w-0">
                             <div className="flex justify-between items-center">
                                 <span className="text-[9px] font-black uppercase tracking-widest text-zinc-400">{log.agent}</span>
+                                {log.agent === 'The Analyst' && incident.logs.find(l => l.agent === 'The Analyst')?.support_agency && (
+                                    <span className="text-[7px] font-black text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded uppercase">Support: {incident.logs.find(l => l.agent === 'The Analyst')?.support_agency.split('_')[0]}</span>
+                                )}
                             </div>
                             <p className="text-[9px] leading-relaxed text-zinc-500 mt-0.5 line-clamp-1 italic">
                                 {log.message}

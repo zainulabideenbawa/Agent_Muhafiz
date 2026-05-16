@@ -3,65 +3,86 @@ import { Shield, Activity, Users, Truck, Heart, Menu } from 'lucide-react';
 
 const MetricsUI = ({ activeCrises, deptStats, livesSaved, toggleSidebar, activeDept, departments }) => {
     const currentDept = departments[activeDept] || { name: 'Unknown Unit', color: 'text-zinc-500' };
+    const [vitals, setVitals] = React.useState(null);
+
+    React.useEffect(() => {
+        const fetchVitals = async () => {
+            try {
+                const res = await fetch('http://localhost:3001/api/city-vitals');
+                const data = await res.json();
+                setVitals(data);
+            } catch (e) { console.error(e); }
+        };
+        fetchVitals();
+        const interval = setInterval(fetchVitals, 10000);
+        return () => clearInterval(interval);
+    }, []);
 
     return (
-        <div className="h-20 bg-black/40 border-b border-zinc-800 backdrop-blur-xl flex items-center px-6 justify-between z-50 relative">
-            {/* Left: Branding & Toggle */}
-            <div className="flex items-center gap-6">
+        <div className="h-14 bg-[#09090b]/80 border-b border-white/5 backdrop-blur-3xl flex items-center px-6 justify-between z-[100] relative">
+            {/* Left: Branding */}
+            <div className="flex items-center gap-6 w-[300px]">
                 <button 
                     onClick={toggleSidebar}
-                    className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 transition-colors"
+                    className="p-1.5 hover:bg-white/5 rounded text-zinc-500 transition-colors"
                 >
-                    <Menu size={20} />
+                    <Menu size={16} />
                 </button>
                 <div className="flex items-center gap-3">
-                    <div className="flex items-center justify-center w-8 h-8 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
-                        <Shield className="text-emerald-500" size={16} />
-                    </div>
-                    <div>
-                        <h1 className="text-xs font-black tracking-[0.2em] text-zinc-100 uppercase leading-none mb-1">Muhafiz-X</h1>
-                        <p className="text-[8px] font-mono text-zinc-600 uppercase tracking-widest leading-none">Sovereign Grid</p>
+                    <Shield className="text-emerald-500" size={14} />
+                    <div className="flex flex-col">
+                        <h1 className="text-[10px] font-black tracking-[0.2em] text-white uppercase leading-none mb-0.5">Muhafiz-X</h1>
+                        <span className="text-[7px] font-mono text-zinc-600 uppercase tracking-widest leading-none">OS.SOVEREIGN.v1</span>
                     </div>
                 </div>
             </div>
 
-            {/* Center: Sovereign Identity Header */}
-            <div className="absolute left-1/2 -translate-x-1/2 flex flex-col items-center">
-                <span className="text-[8px] font-black text-zinc-600 uppercase tracking-[0.3em] mb-1">Active Tactical Authority</span>
-                <div className="flex items-center gap-2">
-                    <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${currentDept.color.replace('text-', 'bg-')}`} />
-                    <span className={`text-sm font-black uppercase tracking-tighter ${currentDept.color}`}>
-                        {currentDept.name}
+            {/* Center: City Vitals HUD (Integrated) */}
+            <div className="flex-1 flex justify-center gap-8 border-x border-white/5 h-full items-center">
+                {vitals ? (
+                    <>
+                        <HeaderVital label="AQI" value={vitals.avg_aqi} color="emerald" />
+                        <HeaderVital label="TEMP" value={`${vitals.avg_temp}°`} color="orange" />
+                        <HeaderVital label="HUMID" value={`${vitals.avg_humidity}%`} color="blue" />
+                        <div className="h-4 w-px bg-white/5 mx-2" />
+                        <div className="flex items-center gap-2">
+                            <span className="text-[7px] font-black text-zinc-600 uppercase tracking-widest">GRID</span>
+                            <span className="text-[9px] font-mono font-black text-emerald-500">{vitals.active_nodes}/{vitals.total_nodes}</span>
+                        </div>
+                    </>
+                ) : (
+                    <span className="text-[8px] font-mono text-zinc-700 animate-pulse tracking-widest uppercase">Syncing City Pulse...</span>
+                )}
+            </div>
+
+            {/* Right: Operational Metrics */}
+            <div className="flex items-center gap-8 w-[300px] justify-end">
+                <HeaderMetric label="CRISES" value={activeCrises} color="red" />
+                <HeaderMetric label="SAVED" value={livesSaved} color="emerald" />
+                <div className="flex items-center gap-3 pl-6 border-l border-white/5 h-6">
+                    <div className={`w-1 h-3 rounded-full ${currentDept.color.replace('text-', 'bg-')}`} />
+                    <span className={`text-[9px] font-black uppercase tracking-[0.1em] ${currentDept.color}`}>
+                        {currentDept.name.split(' ')[0]}
                     </span>
                 </div>
-            </div>
-
-            {/* Right: Live Metrics Grid */}
-            <div className="flex items-center gap-8">
-                <MetricItem 
-                    icon={<Activity className="text-red-500" size={14} />} 
-                    label="Crises" 
-                    value={activeCrises} 
-                />
-                <MetricItem 
-                    icon={<Users className="text-blue-500" size={14} />} 
-                    label="Personnel" 
-                    value={deptStats.officers} 
-                />
-                <MetricItem 
-                    icon={<Truck className="text-orange-500" size={14} />} 
-                    label="Fleet" 
-                    value={deptStats.trucks} 
-                />
-                <MetricItem 
-                    icon={<Heart className="text-emerald-500" size={14} />} 
-                    label="Saved" 
-                    value={livesSaved} 
-                />
             </div>
         </div>
     );
 };
+
+const HeaderVital = ({ label, value, color }) => (
+    <div className="flex items-baseline gap-2">
+        <span className="text-[7px] font-black text-zinc-600 uppercase tracking-widest">{label}</span>
+        <span className={`text-[11px] font-mono font-black text-${color}-500/90 tracking-tighter`}>{value}</span>
+    </div>
+);
+
+const HeaderMetric = ({ label, value, color }) => (
+    <div className="flex flex-col items-end">
+        <span className="text-[7px] font-black text-zinc-600 uppercase tracking-widest mb-0.5">{label}</span>
+        <span className="text-xs font-mono font-black text-white">{value}</span>
+    </div>
+);
 
 const MetricItem = ({ icon, label, value, subValue }) => (
     <div className="flex items-center gap-3">

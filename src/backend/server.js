@@ -48,7 +48,19 @@ app.post('/tools/vitals', (req, res) => {
     });
 });
 
-import { getDeptResources, updateDeptResources, saveIncident, updateIncidentState } from './db.js';
+import { sql, getDepartmentResources, updateDepartmentResources, saveIncident, updateIncidentState, getCitySensors, getCityVitals, getPerformanceStats } from './db.js';
+
+app.get('/api/performance/:deptId', (req, res) => {
+    res.json(getPerformanceStats(req.params.deptId));
+});
+
+app.get('/api/sensors', (req, res) => {
+    res.json(getCitySensors());
+});
+
+app.get('/api/city-vitals', (req, res) => {
+    res.json(getCityVitals());
+});
 
 app.get('/tools/resources', (req, res) => {
     res.json(getDeptResources('KMC_HEALTH'));
@@ -63,6 +75,97 @@ app.post('/api/department-resources/:deptId', (req, res) => {
     res.json(updated);
 });
 
+let activeUserDirective = null;
+
+app.post('/api/agent-directive', (req, res) => {
+    const { directive } = req.body;
+    activeUserDirective = directive;
+    console.log(`[Sovereign] Manual Directive Received: ${directive}`);
+    res.json({ success: true, directive });
+});
+
+// 4. Mission Tasking System
+app.get('/api/tasks', async (req, res) => {
+    if (sql) {
+        const tasks = await sql`SELECT * FROM mission_tasks ORDER BY id DESC`;
+        return res.json(tasks);
+    }
+    res.json([]);
+});
+
+app.post('/api/tasks/:taskId/status', async (req, res) => {
+    const { taskId } = req.params;
+    const { status, summary } = req.body;
+    if (sql) {
+        await sql`
+            UPDATE mission_tasks 
+            SET status = ${status}, resolution_summary = ${summary}, completed_at = ${status === 'RESOLVED' ? new Date() : null}
+            WHERE task_id = ${taskId}
+        `;
+    }
+    res.json({ success: true });
+});
+
+// 7. Professional Auth Gateway
+app.post('/api/login', async (req, res) => {
+    const { email, password } = req.body;
+    
+    // In a production app, we would hash/check passwords here
+    // For this Sovereign OS, we'll use role-based routing from the DB
+    if (sql) {
+        const users = await sql`SELECT * FROM command_profiles WHERE email = ${email}`;
+        if (users.length > 0) {
+            return res.json({ success: true, user: users[0] });
+        }
+    }
+    
+    // Default Fallback for Demo
+    if (email === 'admin@muhafiz.gov' && password === 'sovereign') {
+        return res.json({ success: true, user: { role: 'SUPER_ADMIN', name: 'Sovereign Architect', email } });
+    }
+    res.status(401).json({ success: false, message: 'Invalid Credentials' });
+});
+
+// 8. Sovereign Execution (Hard Logic)
+app.post('/api/execute/deploy-hub', async (req, res) => {
+    const { sector, dept } = req.body;
+    if (sql) {
+        await sql`
+            INSERT INTO department_hubs (dept_id, name, location, trucks, ambulances, officers)
+            VALUES (${dept}, ${sector + ' Station'}, ${sector}, 5, 2, 10)
+        `;
+    }
+    res.json({ success: true, message: `Station Authorized in ${sector}` });
+});
+
+app.post('/api/execute/dispatch-maintenance', async (req, res) => {
+    const { sector, logic } = req.body;
+    if (sql) {
+        await sql`
+            INSERT INTO mission_tasks (task_id, incident_ref, status, assigned_agent, mission_objective, priority_level)
+            VALUES (${'MNT-' + Date.now().toString().slice(-4)}, 'PREVENTATIVE', 'ASSIGNED', 'KMC_ENG', ${'Sewerage Clearance: ' + sector}, 3)
+        `;
+    }
+    res.json({ success: true, message: 'Maintenance Crew Dispatched' });
+});
+
+import { getUrbanOptimization } from './db.js';
+
+// 6. Sovereign Architect (Super Admin Intelligence)
+app.get('/api/sovereign-intelligence', (req, res) => {
+    res.json(getUrbanOptimization());
+});
+
+// 5. User Management (Command Profiles)
+app.get('/api/commander-profile/:id', async (req, res) => {
+    const { id } = req.params;
+    if (sql) {
+        const profiles = await sql`SELECT * FROM command_profiles WHERE commander_id = ${id}`;
+        return res.json(profiles[0] || { name: 'Unknown', rank: 'Guest' });
+    }
+    res.json({ name: 'Simulated Commander', rank: 'Sovereign-1' });
+});
+
 app.post('/tools/simulate', (req, res) => {
     const { action_plan } = req.body;
     const isApproved = Math.random() > 0.2;
@@ -74,6 +177,7 @@ export const runSovereignLogic = async (incidentId, input) => {
     try {
         const initialState = {
             signal: { raw_input: input || "NIPA doob gaya" },
+            user_directive: activeUserDirective,
             metadata: { incidentId }, 
             traceLogs: []
         };
@@ -114,6 +218,25 @@ export const runSovereignLogic = async (incidentId, input) => {
             await updateIncidentState(incidentId, 'PROCESSING', finalState);
             
             await new Promise(resolve => setTimeout(resolve, 1500));
+        }
+
+        // Save final state to persistence
+        await updateIncidentState(incidentId, 'RESOLVED', finalState);
+
+        // AUTO-TASKING BRIDGE: Create a formal mission task from the AI analysis
+        if (sql && finalState.deployment) {
+            await sql`
+                INSERT INTO mission_tasks (task_id, incident_ref, status, assigned_agent, mission_objective, priority_level)
+                VALUES (
+                    ${'TSK-' + Math.random().toString(36).substr(2, 4).toUpperCase()},
+                    ${incidentId},
+                    'ON_SCENE',
+                    'The Dispatcher',
+                    ${finalState.deployment.logic || 'Urban Emergency Response'},
+                    ${finalState.deployment.threat_level || 5}
+                )
+            `;
+            console.log(`[Sovereign] Task Spawned for ${incidentId}`);
         }
 
         await updateIncidentState(incidentId, 'COMPLETED', finalState);
