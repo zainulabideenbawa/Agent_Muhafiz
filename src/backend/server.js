@@ -48,7 +48,7 @@ app.post('/tools/vitals', (req, res) => {
     });
 });
 
-import { getDeptResources, updateDeptResources, saveIncident, updateIncidentState } from './db.js';
+import { initDb, getDeptResources, updateDeptResources, saveIncident, updateIncidentState } from './db.js';
 
 app.get('/tools/resources', (req, res) => {
     res.json(getDeptResources('KMC_HEALTH'));
@@ -140,8 +140,40 @@ app.post('/api/trigger-crisis', async (req, res) => {
     res.json({ success: true, incidentId });
 });
 
+// Mobile App Endpoints
+app.get('/api/incidents', async (req, res) => {
+    try {
+        const incidents = await sql`SELECT * FROM incidents ORDER BY created_at DESC LIMIT 20`;
+        res.json(incidents);
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/retract-alert', async (req, res) => {
+    const { incidentId, reason } = req.body;
+    console.log(`[Auditor Agent] ALERT RETRACTION: ${incidentId} due to ${reason}`);
+    
+    try {
+        await updateIncidentState(incidentId, 'RETRACTED', { retraction_reason: reason });
+        broadcast({
+            type: 'TRACE_LOG',
+            incidentId,
+            log: {
+                agent: 'The Auditor',
+                message: `ALERT RETRACTED: Human-in-the-loop verification confirms ${reason}.`,
+                outcome: 'Success'
+            }
+        });
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 const PORT = 3001;
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
+    await initDb();
     console.log(`=========================================`);
     console.log(`Muhafiz-X Backend Server Running!`);
     console.log(`HTTP Port: http://localhost:${PORT}`);

@@ -6,7 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "vite",
-    "server": "node src/backend/server.js"
+    "server": "node src/backend/server.js",
+    "connect": "concurrently \"npm run dev\" \"npm run server\""
   },
   "repository": {
     "type": "git",
@@ -40,5 +41,8 @@
     "vite": "^8.0.13",
     "ws": "^8.20.1"
   },
-  "type": "module"
+  "type": "module",
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
 }

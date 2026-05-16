@@ -8,6 +8,7 @@ export const sql = neon(process.env.DATABASE_URL);
 
 export const initDb = async () => {
     try {
+        console.log(process.env.DATABASE_URL);
         if (!process.env.DATABASE_URL) {
             console.warn("⚠️ DATABASE_URL not found. Neon DB integration disabled.");
             return;
@@ -21,8 +22,11 @@ export const initDb = async () => {
         await sql`
             CREATE TABLE incidents (
                 id SERIAL PRIMARY KEY,
-                description TEXT,
+                incident_id TEXT UNIQUE,
+                type TEXT,
+                location TEXT,
                 status TEXT DEFAULT 'ANALYZING',
+                data JSONB,
                 last_agent TEXT DEFAULT 'SENTINEL',
                 created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
             )
@@ -82,6 +86,7 @@ export const updateIncidentState = async (incidentId, status, data) => {
         RETURNING *
     `;
 };
+
 
 export const getPendingIncidents = async () => {
     if (!sql) return [];
