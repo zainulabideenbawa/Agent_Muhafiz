@@ -23,7 +23,7 @@ class MuhafizTheme {
         error: crisisRed,
         surface: tacticalGray,
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: tacticalGray,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
