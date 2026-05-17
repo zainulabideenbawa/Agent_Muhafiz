@@ -8,6 +8,10 @@ import '../theme/theme.dart';
 import 'dashboard_screen.dart';
 import 'signup_screen.dart';
 import '../widgets/feedback_widgets.dart';
+import '../services/auth_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'onboarding_screen.dart';
+
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -36,15 +40,22 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     setState(() => _isLoading = true);
-    // Simulate network delay
-    await Future.delayed(const Duration(seconds: 2));
     
-    if (mounted) {
-      setState(() {
-        _isOtpSent = true;
-        _isLoading = false;
-      });
-      MuhafizFeedback.showToast("ENCRYPTED OTP DISPATCHED");
+    try {
+      final res = await AuthService.requestOtp(_nicController.text);
+      if (res['success'] == true) {
+        setState(() {
+          _isOtpSent = true;
+          _isLoading = false;
+        });
+        MuhafizFeedback.showToast("ENCRYPTED OTP DISPATCHED");
+      } else {
+        setState(() => _isLoading = false);
+        MuhafizFeedback.showToast(res['message'] ?? "AUTHENTICATION REQUEST FAILED");
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      MuhafizFeedback.showToast("COUNCIL SERVER OFFLINE");
     }
   }
 
@@ -55,15 +66,46 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     setState(() => _isLoading = true);
-    await Future.delayed(const Duration(seconds: 2));
     
-    if (mounted) {
+    try {
+      final res = await AuthService.verifyOtp(_nicController.text, _otpController.text);
+      if (res['success'] == true) {
+        setState(() => _isLoading = false);
+        MuhafizFeedback.showToast("IDENTITY VERIFIED. ACCESS GRANTED.");
+        
+        final user = res['user'] ?? {'name': 'Sovereign Citizen'};
+        final mapUser = Map<String, dynamic>.from(user);
+
+        final prefs = await SharedPreferences.getInstance();
+        final bool isLocationOnboarded = prefs.getBool('location_onboarded') ?? false;
+
+        if (mounted) {
+          if (isLocationOnboarded) {
+            mapUser['location'] = {
+              'province': prefs.getString('province'),
+              'city': prefs.getString('city'),
+              'district': prefs.getString('district'),
+              'area': prefs.getString('area'),
+              'landmark': prefs.getString('landmark'),
+            };
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => DashboardScreen(user: mapUser)),
+            );
+          } else {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => OnboardingScreen(user: mapUser)),
+            );
+          }
+        }
+      } else {
+        setState(() => _isLoading = false);
+        MuhafizFeedback.showToast(res['message'] ?? "INVALID AUTH CODE");
+      }
+    } catch (e) {
       setState(() => _isLoading = false);
-      MuhafizFeedback.showToast("IDENTITY VERIFIED. ACCESS GRANTED.");
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const DashboardScreen(user: {'name': 'Sovereign Citizen'})),
-      );
+      MuhafizFeedback.showToast("VERIFICATION PROTOCOL FAILURE");
     }
   }
 
@@ -162,7 +204,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               controller: _nicController,
                               inputFormatters: [nicFormatter],
                               keyboardType: TextInputType.number,
-                              style: GoogleFonts.jetbrainsMono(
+                              style: GoogleFonts.jetBrainsMono(
                                 fontSize: 18,
                                 letterSpacing: 2,
                                 color: MuhafizTheme.onSurface,
@@ -193,7 +235,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               defaultPinTheme: PinTheme(
                                 width: 50,
                                 height: 60,
-                                textStyle: GoogleFonts.jetbrainsMono(
+                                textStyle: GoogleFonts.jetBrainsMono(
                                   fontSize: 24,
                                   color: MuhafizTheme.primaryEmerald,
                                   fontWeight: FontWeight.bold,
@@ -207,7 +249,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               focusedPinTheme: PinTheme(
                                 width: 50,
                                 height: 60,
-                                textStyle: GoogleFonts.jetbrainsMono(
+                                textStyle: GoogleFonts.jetBrainsMono(
                                   fontSize: 24,
                                   color: MuhafizTheme.primaryEmerald,
                                   fontWeight: FontWeight.bold,

@@ -41,6 +41,20 @@ class ApiService {
     }
   }
 
+  static Future<bool> acceptQuest(String incidentId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/accept-quest'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'incidentId': incidentId}),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Error accepting quest: $e');
+      return true; // Mock true for development if server is down
+    }
+  }
+
   // Mock Technical Briefings (Simulated Communicator Agent Data)
   static Map<String, dynamic> getTechnicalBrief(String type) {
     if (type == 'fire') {

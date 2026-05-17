@@ -35,8 +35,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             const SizedBox(height: 32),
             _buildDataBlade('CITIZENSHIP DATA', [
               {'label': 'LEGAL NAME', 'value': widget.user?['name'] ?? 'SOVEREIGN CITIZEN'},
-              {'label': 'NIC NUMBER', 'value': _showNIC ? '42101-1234567-1' : 'XXXXX-XXXXXXX-X', 'action': () => setState(() => _showNIC = !_showNIC)},
-              {'label': 'ACCOUNT ID', 'value': 'MUH-9928-AX'},
+              {'label': 'NIC NUMBER', 'value': _showNIC ? (widget.user?['nic_number'] ?? widget.user?['nic'] ?? '42101-1234567-1') : 'XXXXX-XXXXXXX-X', 'action': () => setState(() => _showNIC = !_showNIC)},
+              {'label': 'ACCOUNT ID', 'value': widget.user?['id'] != null ? 'MUH-${widget.user!['id']}-AX' : 'MUH-9928-AX'},
             ]),
             const SizedBox(height: 24),
             _buildDataBlade('GEOSPATIAL ANCHOR', [

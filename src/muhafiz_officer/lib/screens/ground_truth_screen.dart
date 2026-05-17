@@ -39,7 +39,11 @@ class _GroundTruthScreenState extends State<GroundTruthScreen> {
           backgroundColor: MuhafizTheme.sovereignGreen,
         ),
       );
-      Future.delayed(const Duration(seconds: 1), () => Navigator.pop(context));
+      Future.delayed(const Duration(seconds: 1), () {
+        if (mounted) {
+          Navigator.pop(context);
+        }
+      });
     }
   }
 

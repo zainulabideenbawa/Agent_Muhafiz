@@ -7,6 +7,7 @@ router.post('/login', async (req, res) => {
     const { email, password } = req.body;
 
     const user = await findCommanderByEmail(email);
+    console.log(user);
     if (user) return res.json({ success: true, user });
 
     if (email === 'admin@muhafiz.gov' && password === 'sovereign') {
@@ -24,7 +25,7 @@ router.get('/commander-profile/:id', async (req, res) => {
 router.post('/citizen/request-otp', async (req, res) => {
     const { nic } = req.body;
     if (!nic) return res.status(400).json({ success: false, message: 'NIC is required' });
-    
+
     // MOCK OTP LOGIC
     console.log(`[AUTH] OTP Requested for NIC: ${nic}. Code sent: 123456`);
     res.json({ success: true, message: 'OTP sent to registered number' });
@@ -32,7 +33,7 @@ router.post('/citizen/request-otp', async (req, res) => {
 
 router.post('/citizen/verify-otp', async (req, res) => {
     const { nic, otp } = req.body;
-    
+
     if (otp !== '123456') {
         return res.status(401).json({ success: false, message: 'Invalid OTP' });
     }
@@ -50,6 +51,31 @@ router.post('/citizen/verify-otp', async (req, res) => {
     }
 
     res.json({ success: true, user });
+});
+
+// MANUAL CITIZEN SIGNUP
+router.post('/signup', async (req, res) => {
+    const { nic, name, sector, password } = req.body;
+    if (!nic) return res.status(400).json({ success: false, message: 'NIC is required' });
+
+    try {
+        let existingUser = await findUserByNic(nic);
+        if (existingUser) {
+            return res.status(400).json({ success: false, message: 'Citizen already registered' });
+        }
+
+        const newUsers = await createUser({
+            nic,
+            name: name || `Citizen-${nic.slice(-4)}`,
+            sector: sector || 'GENERAL',
+            password: password || 'OIDC_VERIFIED'
+        });
+
+        res.json({ success: true, user: newUsers[0] });
+    } catch (error) {
+        console.error("Signup error:", error);
+        res.status(500).json({ success: false, message: 'Enrollment failed' });
+    }
 });
 
 export default router;

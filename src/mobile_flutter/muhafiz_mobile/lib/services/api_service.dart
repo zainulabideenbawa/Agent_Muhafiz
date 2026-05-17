@@ -4,7 +4,13 @@ import 'package:http/http.dart' as http;
 import '../widgets/feedback_widgets.dart';
 
 class ApiService {
-  static final String _host = Platform.isAndroid ? '10.0.2.2' : 'localhost';
+  // --- HOST CONFIGURATION ---
+  // For iOS Simulator: '127.0.0.1'
+  // For Physical iPhone on same WiFi: use Mac's LAN IP (run `ipconfig getifaddr en0`)
+  // For Android Emulator: '10.0.2.2'
+  static const String _macLanIp = '192.168.0.240';
+  static final String _host =
+      Platform.isAndroid ? '10.0.2.2' : _macLanIp;
   static final String _baseUrl = 'http://$_host:3001/api';
 
   static Future<Map<String, dynamic>> post(String path, Map<String, dynamic> body) async {

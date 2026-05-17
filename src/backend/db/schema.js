@@ -35,6 +35,7 @@ export const department_hubs = pgTable('department_hubs', {
 export const command_profiles = pgTable('command_profiles', {
     id: serial('id').primaryKey(),
     commander_id: text('commander_id').unique().notNull(),
+    email: text('email'),
     name: text('name').notNull(),
     rank: text('rank').notNull(),
     department: text('department').notNull(),

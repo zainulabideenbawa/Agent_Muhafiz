@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:glassmorphism_widgets/glassmorphism_widgets.dart';
 import '../theme/theme.dart';
 import 'voice_report_screen.dart';
 import 'profile_screen.dart';
 import 'council_hub_screen.dart';
 import 'gov_services_screen.dart';
+import 'safe_routes_map_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final Map<String, dynamic>? user;
@@ -26,6 +26,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         index: _selectedIndex,
         children: [
           _SentinelPulseTab(user: widget.user),
+          const SafeRoutesMapScreen(),
           const CouncilHubScreen(),
           const GovServicesScreen(),
           ProfileScreen(user: widget.user),
@@ -62,6 +63,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         unselectedLabelStyle: Theme.of(context).textTheme.labelSmall,
         items: const [
           BottomNavigationBarItem(icon: Icon(LucideIcons.activity, size: 20), label: 'PULSE'),
+          BottomNavigationBarItem(icon: Icon(LucideIcons.navigation, size: 20), label: 'EVAC'),
           BottomNavigationBarItem(icon: Icon(LucideIcons.users, size: 20), label: 'COUNCIL'),
           BottomNavigationBarItem(icon: Icon(LucideIcons.layoutGrid, size: 20), label: 'HUB'),
           BottomNavigationBarItem(icon: Icon(LucideIcons.shield, size: 20), label: 'VAULT'),

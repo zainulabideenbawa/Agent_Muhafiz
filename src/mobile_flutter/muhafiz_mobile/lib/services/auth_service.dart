@@ -4,9 +4,11 @@ import 'package:http/http.dart' as http;
 
 class AuthService {
   // 10.0.2.2 is the special alias for localhost in Android Emulators
-  static final String baseUrl = Platform.isAndroid 
-    ? 'http://10.0.2.2:3001/api/auth' 
-    : 'http://localhost:3001/api/auth';
+  // For physical iPhone, use Mac's LAN IP (same as ApiService)
+  static const String _macLanIp = '192.168.0.240';
+  static final String baseUrl = Platform.isAndroid
+      ? 'http://10.0.2.2:3001/api'
+      : 'http://$_macLanIp:3001/api';
 
   static Future<Map<String, dynamic>> signup({
     required String nic,

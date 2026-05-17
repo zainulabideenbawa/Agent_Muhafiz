@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:animate_do/animate_do.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import '../theme/theme.dart';
 import '../widgets/feedback_widgets.dart';
+import '../services/auth_service.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -59,7 +59,7 @@ class _SignupScreenState extends State<SignupScreen> {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
-                value: relation,
+                initialValue: relation,
                 items: ['Child', 'Spouse', 'Parent', 'Other']
                     .map((e) => DropdownMenuItem(value: e, child: Text(e)))
                     .toList(),
@@ -90,14 +90,32 @@ class _SignupScreenState extends State<SignupScreen> {
 
   void _handleSignup() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_nicController.text.length < 15) {
+      MuhafizFeedback.showToast("INVALID CNIC STRUCTURE");
+      return;
+    }
     
     setState(() => _isLoading = true);
-    await Future.delayed(const Duration(seconds: 3));
     
-    if (mounted) {
+    try {
+      final res = await AuthService.signup(
+        nic: _nicController.text,
+        name: _nameController.text,
+        sector: _landmarkController.text.isNotEmpty ? _landmarkController.text : (_selectedCity ?? 'GENERAL'),
+        password: 'OIDC_VERIFIED',
+      );
+      
+      if (res['success'] == true) {
+        setState(() => _isLoading = false);
+        MuhafizFeedback.showToast("ENROLLMENT PROTOCOL COMPLETED. IDENTITY VAULT CREATED.");
+        Navigator.pop(context);
+      } else {
+        setState(() => _isLoading = false);
+        MuhafizFeedback.showToast(res['message'] ?? "ENROLLMENT PROTOCOL FAILED");
+      }
+    } catch (e) {
       setState(() => _isLoading = false);
-      MuhafizFeedback.showToast("ENROLLMENT PROTOCOL INITIATED. WAIT FOR APPROVAL.");
-      Navigator.pop(context);
+      MuhafizFeedback.showToast("COUNCIL SERVER OFFLINE");
     }
   }
 
@@ -251,6 +269,7 @@ class _SignupScreenState extends State<SignupScreen> {
         TextFormField(
           controller: controller,
           inputFormatters: formatter != null ? [formatter] : [],
+          validator: (val) => val == null || val.trim().isEmpty ? 'FIELD REQUIRED' : null,
           decoration: InputDecoration(
             hintText: hint,
             prefixIcon: Icon(icon, size: 18),
@@ -272,9 +291,10 @@ class _SignupScreenState extends State<SignupScreen> {
         Text(label, style: Theme.of(context).textTheme.labelSmall),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          value: value,
+          initialValue: value,
           items: items.map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
           onChanged: onChanged,
+          validator: (val) => val == null ? 'FIELD REQUIRED' : null,
           decoration: const InputDecoration(
             prefixIcon: Icon(LucideIcons.chevronDown, size: 18),
           ),

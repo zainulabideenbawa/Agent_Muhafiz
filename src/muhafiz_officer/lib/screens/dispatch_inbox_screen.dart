@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' hide Size;
 import '../theme.dart';
 import '../services/api_service.dart';
-import '../widgets/agent_trace_hud.dart';
 import 'ground_truth_screen.dart';
 
 class DispatchInboxScreen extends StatefulWidget {
@@ -43,27 +43,70 @@ class _DispatchInboxScreenState extends State<DispatchInboxScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: Stack(
+      body: Column(
         children: [
-          // Background Tactical Grid
-          CustomPaint(
-            painter: TacticalGridPainter(),
-            child: Container(),
+          // Live Routing Map
+          Container(
+            height: 250,
+            decoration: const BoxDecoration(
+              border: Border(bottom: BorderSide(color: MuhafizTheme.sovereignGreen, width: 2)),
+            ),
+            child: Stack(
+              children: [
+                MapWidget(
+                  onMapCreated: (MapboxMap mapboxMap) {
+                    // Map initialization
+                  },
+                ),
+                // Overlay for the "Live Routing Map" HUD
+                Positioned(
+                  top: 10,
+                  left: 10,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.7),
+                      border: Border.all(color: MuhafizTheme.sovereignGreen),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.satellite_alt, color: MuhafizTheme.sovereignGreen, size: 14),
+                        SizedBox(width: 6),
+                        Text('ORACLE LIVE ROUTING', style: TextStyle(color: MuhafizTheme.sovereignGreen, fontSize: 10, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
           
-          if (isLoading)
-            const Center(child: CircularProgressIndicator(color: MuhafizTheme.sovereignGreen))
-          else if (incidents.isEmpty)
-            const Center(child: Text('NO ACTIVE MISSIONS', style: TextStyle(color: MuhafizTheme.textSecondary)))
-          else
-            ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-              itemCount: incidents.length,
-              itemBuilder: (context, index) {
-                final incident = incidents[index];
-                return _buildIncidentCard(incident);
-              },
+          // Dispatch Feed
+          Expanded(
+            child: Stack(
+              children: [
+                // Background Tactical Grid
+                CustomPaint(
+                  painter: TacticalGridPainter(),
+                  child: Container(),
+                ),
+                
+                if (isLoading)
+                  const Center(child: CircularProgressIndicator(color: MuhafizTheme.sovereignGreen))
+                else if (incidents.isEmpty)
+                  const Center(child: Text('NO ACTIVE MISSIONS', style: TextStyle(color: MuhafizTheme.textSecondary)))
+                else
+                  ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                    itemCount: incidents.length,
+                    itemBuilder: (context, index) {
+                      final incident = incidents[index];
+                      return _buildIncidentCard(incident);
+                    },
+                  ),
+              ],
             ),
+          ),
         ],
       ),
     );

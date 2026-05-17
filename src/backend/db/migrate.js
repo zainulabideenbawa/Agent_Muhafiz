@@ -51,6 +51,7 @@ export const initDb = async () => {
             CREATE TABLE IF NOT EXISTS command_profiles (
                 id SERIAL PRIMARY KEY,
                 commander_id TEXT UNIQUE NOT NULL,
+                email TEXT,
                 name TEXT NOT NULL,
                 rank TEXT NOT NULL,
                 department TEXT NOT NULL,

@@ -4,14 +4,7 @@ import 'theme/theme.dart';
 import 'screens/login_screen.dart';
 
 void main() {
-  runApp(
-    MultiProvider(
-      providers: [
-        // We will add providers here later
-      ],
-      child: const MuhafizApp(),
-    ),
-  );
+  runApp(const MuhafizApp());
 }
 
 class MuhafizApp extends StatelessWidget {
