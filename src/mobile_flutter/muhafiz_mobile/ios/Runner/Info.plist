@@ -26,6 +26,10 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Muhafiz-X needs microphone access to record emergency voice reports and transmit them to the Sentinel Reasoning Agent.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Muhafiz-X uses on-device speech recognition to transcribe your emergency report into a structured incident signal.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../services/api_service.dart';
 import '../widgets/feedback_widgets.dart';
 import '../theme/theme.dart';
@@ -13,40 +14,31 @@ class VoiceReportScreen extends StatefulWidget {
   State<VoiceReportScreen> createState() => _VoiceReportScreenState();
 }
 
-class _VoiceReportScreenState extends State<VoiceReportScreen> with TickerProviderStateMixin {
+class _VoiceReportScreenState extends State<VoiceReportScreen>
+    with TickerProviderStateMixin {
   late AnimationController _pulseController;
   late AnimationController _waveController;
-  
-  // State variables
-  String _status = "Awaiting Signal..."; // "Awaiting Signal...", "Recording...", "Analyzing Signal...", "Report Logged"
+
+  // STT engine
+  final stt.SpeechToText _speech = stt.SpeechToText();
+  bool _speechAvailable = false;
+  bool _speechInitializing = false;
+
+  // Mode Toggle: Voice vs Text
+  bool _isTextMode = false;
+  final TextEditingController _textController = TextEditingController();
+
+  // Screen state
+  String _status = 'AWAITING SIGNAL';
   bool _isRecording = false;
   bool _isSubmitting = false;
-  String _transcribedText = "";
-  String _incidentId = "";
-  
-  // Scenarios to simulate speech-to-text
-  final List<Map<String, String>> _scenarios = [
-    {
-      "title": "FIRE OUTBREAK",
-      "text": "Gulshan Block 4 me commercial market k kareeb aag lag gayi hai, Rescue 1122 aur fire brigade ko foran bhejein. Zakhmiyon ki zaroorat par sakti hai."
-    },
-    {
-      "title": "ARMED ROBBERY",
-      "text": "Main boulevard bank k bahar dacoity ho rahi hai, firing ki awazein suni gayi hain, bohot afra-tafri machi hui hai. Police dispatch jaldi chahiye."
-    },
-    {
-      "title": "FLOOD & GRIDLOCK",
-      "text": "University Road par pani ki bari line burst ho gayi hai jis se poora rasta block ho gaya hai, traffic jam hai aur gariyan phasi hui hain."
-    },
-    {
-      "title": "GAS EXPLOSION",
-      "text": "Local sector shop me gas cylinder blast hua hai, chhat gir gayi hai aur kuch log dabay hue lagte hain. Immediate emergency response foran chahiye."
-    }
-  ];
+  bool _isLogged = false;
 
-  int _selectedScenarioIndex = 0;
-  Timer? _transcriptionTimer;
-  int _charIndex = 0;
+  // Transcription / Input
+  String _transcribedText = '';
+  String _lastWords = '';
+  String _incidentId = '';
+  double _confidence = 0.0;
   double _recordingDuration = 0.0;
   Timer? _durationTimer;
 
@@ -55,334 +47,318 @@ class _VoiceReportScreenState extends State<VoiceReportScreen> with TickerProvid
     super.initState();
     _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 15),
-    )..repeat();
-    
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+
     _waveController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: const Duration(milliseconds: 600),
     )..repeat(reverse: true);
+
+    _initSpeech();
+  }
+
+  Future<void> _initSpeech() async {
+    setState(() => _speechInitializing = true);
+    try {
+      _speechAvailable = await _speech.initialize(
+        onError: (e) {
+          debugPrint('[STT] Error: $e');
+          setState(() {
+            _isRecording = false;
+            _status = 'STT ERROR – RETRY';
+          });
+        },
+        onStatus: (status) {
+          debugPrint('[STT] Status: $status');
+          if (status == 'notListening' && _isRecording) {
+            _stopAndSubmit();
+          }
+        },
+      );
+    } catch (e) {
+      _speechAvailable = false;
+    }
+    setState(() => _speechInitializing = false);
   }
 
   @override
   void dispose() {
     _pulseController.dispose();
     _waveController.dispose();
-    _transcriptionTimer?.cancel();
     _durationTimer?.cancel();
+    _speech.stop();
+    _textController.dispose();
     super.dispose();
   }
 
-  void _startRecording() {
-    if (_isSubmitting || _status == "Report Logged") return;
-    
+  // ─── RECORDING ────────────────────────────────────────────────────────────
+
+  Future<void> _startRecording() async {
+    if (_isSubmitting || _isLogged) return;
+
+    if (_speechInitializing) {
+      MuhafizFeedback.showToast('STT initializing, please wait...');
+      return;
+    }
+
+    if (!_speechAvailable) {
+      MuhafizFeedback.showToast('Speech recognition unavailable. Switch to Text Mode.');
+      return;
+    }
+
     setState(() {
       _isRecording = true;
-      _status = "Recording...";
-      _transcribedText = "";
-      _charIndex = 0;
+      _status = 'RECORDING';
+      _transcribedText = '';
+      _lastWords = '';
+      _confidence = 0.0;
       _recordingDuration = 0.0;
     });
 
-    // Start timer for duration
-    _durationTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
-      setState(() {
-        _recordingDuration += 0.1;
-      });
-    });
-
-    // Start typing effect simulation
-    final fullText = _scenarios[_selectedScenarioIndex]["text"]!;
-    final words = fullText.split(" ");
-    
-    _transcriptionTimer = Timer.periodic(const Duration(milliseconds: 150), (timer) {
-      if (_charIndex < words.length) {
-        setState(() {
-          _transcribedText += "${words[_charIndex]} ";
-          _charIndex++;
-        });
-      } else {
-        _transcriptionTimer?.cancel();
+    _durationTimer = Timer.periodic(const Duration(milliseconds: 100), (_) {
+      if (mounted && _isRecording) {
+        setState(() => _recordingDuration += 0.1);
       }
     });
-  }
 
-  void _stopRecordingAndSubmit() async {
-    if (!_isRecording) return;
-    
-    _durationTimer?.cancel();
-    _transcriptionTimer?.cancel();
-    
-    setState(() {
-      _isRecording = false;
-      _status = "Analyzing Signal...";
-      _isSubmitting = true;
-    });
-
-    // If they released too quickly, complete the transcription text
-    final fullText = _scenarios[_selectedScenarioIndex]["text"]!;
-    if (_transcribedText.trim().isEmpty || _recordingDuration < 1.0) {
-      setState(() {
-        _transcribedText = fullText;
-      });
-    }
-
-    try {
-      final response = await ApiService.post('/report', {
-        'signal': _transcribedText.trim(),
-        'metadata': {
-          'type': 'citizen_report',
-          'priority': 'high',
-          'scenario': _scenarios[_selectedScenarioIndex]["title"],
-          'duration': _recordingDuration.toStringAsFixed(1)
+    await _speech.listen(
+      onResult: (result) {
+        if (mounted) {
+          setState(() {
+            _lastWords = result.recognizedWords;
+            _transcribedText = result.recognizedWords;
+            _confidence = result.confidence;
+          });
         }
-      });
-
-      if (response['success']) {
-        setState(() {
-          _status = "Report Logged";
-          _incidentId = response['incidentId'] ?? "MHFZ-9821";
-          _isSubmitting = false;
-        });
-        
-        MuhafizFeedback.showToast("Signal Transmitted Successfully");
-      } else {
-        setState(() {
-          _status = "Awaiting Signal...";
-          _isSubmitting = false;
-        });
-        MuhafizFeedback.showToast(response['error'] ?? "Transmission Failed");
-      }
-    } catch (e) {
-      setState(() {
-        _status = "Awaiting Signal...";
-        _isSubmitting = false;
-      });
-      MuhafizFeedback.showToast("Critical Uplink Error");
-    }
-  }
-
-  void _resetScreen() {
-    setState(() {
-      _status = "Awaiting Signal...";
-      _isRecording = false;
-      _isSubmitting = false;
-      _transcribedText = "";
-      _incidentId = "";
-      _recordingDuration = 0.0;
-    });
-  }
-
-  Widget _buildWaveformBar(double baseHeight, int index) {
-    return AnimatedBuilder(
-      animation: _waveController,
-      builder: (context, child) {
-        final double multiplier = 0.3 + 0.7 * (0.5 + 0.5 * (index % 2 == 0 
-          ? _waveController.value 
-          : 1.0 - _waveController.value));
-        return Container(
-          width: 6,
-          height: baseHeight * multiplier,
-          margin: const EdgeInsets.symmetric(horizontal: 3),
-          decoration: BoxDecoration(
-            color: MuhafizTheme.primaryEmerald,
-            borderRadius: BorderRadius.circular(3),
-            boxShadow: [
-              BoxShadow(
-                color: MuhafizTheme.primaryEmerald.withOpacity(0.3),
-                blurRadius: 4,
-                spreadRadius: 1,
-              ),
-            ],
-          ),
-        );
       },
+      listenFor: const Duration(minutes: 2),
+      pauseFor: const Duration(seconds: 8),
+      partialResults: true,
+      localeId: 'ur_PK',
+      cancelOnError: false,
     );
   }
 
+  Future<void> _stopAndSubmit() async {
+    if (!_isRecording) return;
+
+    _durationTimer?.cancel();
+    await _speech.stop();
+
+    setState(() {
+      _isRecording = false;
+      _status = 'ANALYZING SIGNAL';
+      _isSubmitting = true;
+    });
+
+    final textToSubmit = _transcribedText.trim();
+
+    if (textToSubmit.length < 2 && _recordingDuration < 1.5) {
+      setState(() {
+        _isSubmitting = false;
+        _status = 'AWAITING SIGNAL';
+      });
+      MuhafizFeedback.showToast('Hold longer and speak clearly into the mic');
+      return;
+    }
+
+    final String finalText = textToSubmit.isNotEmpty
+        ? textToSubmit
+        : '[Voice signal captured — transcription pending]';
+
+    await _transmitSignal(finalText, 'citizen_voice_report', {
+      'confidence': _confidence.toStringAsFixed(2),
+      'duration_sec': _recordingDuration.toStringAsFixed(1),
+      'locale': 'ur_PK',
+    });
+  }
+
+  // ─── TEXT SUBMISSION ──────────────────────────────────────────────────────
+
+  Future<void> _submitTextReport() async {
+    final text = _textController.text.trim();
+    if (text.isEmpty) {
+      MuhafizFeedback.showToast('Please type your emergency description first.');
+      return;
+    }
+
+    setState(() {
+      _status = 'ANALYZING SIGNAL';
+      _isSubmitting = true;
+    });
+
+    await _transmitSignal(text, 'citizen_text_report', {
+      'input_method': 'keyboard',
+    });
+  }
+
+  // ─── CENTRAL TRANSMISSION ─────────────────────────────────────────────────
+
+  Future<void> _transmitSignal(String signalText, String type, Map<String, dynamic> extraMeta) async {
+    try {
+      final response = await ApiService.post('/report', {
+        'signal': signalText,
+        'metadata': {
+          'type': type,
+          'priority': 'high',
+          ...extraMeta,
+        }
+      });
+
+      if (response['success'] == true) {
+        setState(() {
+          _status = 'REPORT LOGGED';
+          _incidentId = response['incidentId'] ?? response['data']?['incident_id'] ?? 'MHFZ-????';
+          _isSubmitting = false;
+          _isLogged = true;
+        });
+        MuhafizFeedback.showToast('Signal Transmitted to Sentinel Council');
+      } else {
+        setState(() {
+          _status = 'TRANSMISSION FAILED';
+          _isSubmitting = false;
+        });
+        MuhafizFeedback.showToast(response['error'] ?? 'Upload failed');
+      }
+    } catch (e) {
+      setState(() {
+        _status = 'UPLINK ERROR';
+        _isSubmitting = false;
+      });
+      MuhafizFeedback.showToast('Critical uplink error — check connection');
+    }
+  }
+
+  void _reset() {
+    setState(() {
+      _status = 'AWAITING SIGNAL';
+      _isRecording = false;
+      _isSubmitting = false;
+      _isLogged = false;
+      _transcribedText = '';
+      _lastWords = '';
+      _incidentId = '';
+      _confidence = 0.0;
+      _recordingDuration = 0.0;
+      _textController.clear();
+    });
+  }
+
+  // ─── BUILD ────────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
-    final bool isLogged = _status == "Report Logged";
-    
     return Scaffold(
       backgroundColor: MuhafizTheme.backgroundSlate,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: const Text(
-          'CRISIS INGESTION TERMINAL',
-          style: TextStyle(
-            color: Colors.white,
-            fontFamily: 'JetBrains Mono',
-            letterSpacing: 2,
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        leading: BackButton(
-          color: MuhafizTheme.primaryEmerald,
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
+      appBar: _buildAppBar(),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // 1. STATUS BANNER
-              _buildStatusBanner(),
-              
-              const SizedBox(height: 20),
-              
-              // 2. SCENARIO SELECTOR (only if not recording / submitting / logged)
-              if (!_isRecording && !_isSubmitting && !isLogged) ...[
-                FadeInDown(
-                  duration: const Duration(milliseconds: 400),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'SELECT SIMULATED INCIDENT WAVEFORM',
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: MuhafizTheme.primaryEmerald,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: List.generate(_scenarios.length, (index) {
-                            final bool isSelected = _selectedScenarioIndex == index;
-                            return GestureDetector(
-                              onTap: () => setState(() => _selectedScenarioIndex = index),
-                              child: Container(
-                                margin: const EdgeInsets.only(right: 10),
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                decoration: BoxDecoration(
-                                  color: isSelected 
-                                      ? MuhafizTheme.primaryEmerald.withOpacity(0.15) 
-                                      : MuhafizTheme.surfaceSlate,
-                                  borderRadius: BorderRadius.circular(4),
-                                  border: Border.all(
-                                    color: isSelected 
-                                        ? MuhafizTheme.primaryEmerald 
-                                        : MuhafizTheme.primaryEmerald.withOpacity(0.15),
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Text(
-                                  _scenarios[index]["title"]!,
-                                  style: TextStyle(
-                                    color: isSelected ? Colors.white : MuhafizTheme.mutedSlate,
-                                    fontFamily: 'JetBrains Mono',
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            );
-                          }),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // STATUS BANNER
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+              child: _buildStatusBanner(),
+            ),
 
-              const SizedBox(height: 24),
-              
-              // 3. CENTRAL WORKSPACE (Mic, Waveform or Success Card)
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0D162B),
-                    border: Border.all(color: MuhafizTheme.primaryEmerald.withOpacity(0.15)),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Stack(
-                      children: [
-                        // HUD Grid Background
-                        _buildGridBg(),
-                        
-                        // Main Display
-                        Padding(
-                          padding: const EdgeInsets.all(24.0),
-                          child: Center(
-                            child: isLogged
-                                ? _buildSuccessView()
-                                : _buildVoiceCaptureView(),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+            // WORKSPACE (MIC or KEYBOARD MODE)
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                child: _buildWorkspace(),
               ),
+            ),
 
-              const SizedBox(height: 24),
-              
-              // 4. TRANSCRIPTION TELEMETRY BOX
-              _buildTelemetryBox(),
-            ],
-          ),
+            // TRANSCRIPTION BOX
+            _buildTranscriptionBox(),
+          ],
         ),
       ),
+    );
+  }
+
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      leading: BackButton(
+        color: MuhafizTheme.primaryEmerald,
+        onPressed: () => Navigator.pop(context),
+      ),
+      title: const Text(
+        'CRISIS INGESTION TERMINAL',
+        style: TextStyle(
+          color: Colors.white,
+          fontFamily: 'JetBrains Mono',
+          letterSpacing: 2,
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      actions: [
+        if (!_isLogged && !_isSubmitting)
+          IconButton(
+            icon: Icon(
+              _isTextMode ? LucideIcons.mic : LucideIcons.keyboard,
+              color: MuhafizTheme.primaryEmerald,
+            ),
+            onPressed: () {
+              setState(() {
+                _isTextMode = !_isTextMode;
+                _status = 'AWAITING SIGNAL';
+              });
+              MuhafizFeedback.showToast(
+                _isTextMode ? "SWITCHED TO TEXT MODE" : "SWITCHED TO VOICE MODE",
+              );
+            },
+          ),
+      ],
     );
   }
 
   Widget _buildStatusBanner() {
-    Color bannerColor = MuhafizTheme.primaryEmerald;
-    Color borderColor = MuhafizTheme.primaryEmerald.withOpacity(0.3);
+    Color color = MuhafizTheme.primaryEmerald;
     IconData icon = LucideIcons.radio;
-    bool pulsing = false;
+    bool pulse = false;
 
     if (_isRecording) {
-      bannerColor = const Color(0xFFEF4444);
-      borderColor = const Color(0xFFEF4444).withOpacity(0.3);
-      icon = LucideIcons.dot;
-      pulsing = true;
+      color = const Color(0xFFEF4444);
+      icon = LucideIcons.mic;
+      pulse = true;
     } else if (_isSubmitting) {
-      bannerColor = Colors.amber;
-      borderColor = Colors.amber.withOpacity(0.3);
-      icon = LucideIcons.loader2;
-      pulsing = true;
-    } else if (_status == "Report Logged") {
-      bannerColor = MuhafizTheme.primaryEmerald;
-      borderColor = MuhafizTheme.primaryEmerald;
+      color = Colors.amber;
+      icon = LucideIcons.loader;
+      pulse = true;
+    } else if (_isLogged) {
+      color = MuhafizTheme.primaryEmerald;
       icon = LucideIcons.checkCircle;
+    } else if (_speechInitializing) {
+      color = Colors.amber;
+      icon = LucideIcons.cpu;
+      pulse = true;
     }
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A).withOpacity(0.8),
+        color: const Color(0xFF0F172A),
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: borderColor, width: 1.5),
+        border: Border.all(color: color.withOpacity(0.4), width: 1.5),
         boxShadow: [
-          BoxShadow(
-            color: bannerColor.withOpacity(0.08),
-            blurRadius: 10,
-            spreadRadius: 2,
-          ),
+          BoxShadow(color: color.withOpacity(0.08), blurRadius: 10, spreadRadius: 2),
         ],
       ),
       child: Row(
         children: [
-          if (pulsing)
-            _PulseDot(color: bannerColor)
-          else
-            Icon(icon, color: bannerColor, size: 16),
+          pulse ? _PulseDot(color: color) : Icon(icon, color: color, size: 16),
           const SizedBox(width: 12),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'CONNECTION PROTOCOL: ON',
-                style: TextStyle(
+                'MODE: ${_isTextMode ? "TEXT UPLINK" : "VOICE UPLINK"}',
+                style: const TextStyle(
                   color: MuhafizTheme.mutedSlate,
                   fontFamily: 'JetBrains Mono',
                   fontSize: 9,
@@ -391,13 +367,12 @@ class _VoiceReportScreenState extends State<VoiceReportScreen> with TickerProvid
               ),
               const SizedBox(height: 2),
               Text(
-                _status.toUpperCase(),
+                _speechInitializing ? 'INITIALIZING STT...' : _status,
                 style: TextStyle(
-                  color: bannerColor,
+                  color: color,
                   fontFamily: 'JetBrains Mono',
-                  fontSize: 14,
+                  fontSize: 13,
                   fontWeight: FontWeight.bold,
-                  letterSpacing: 1,
                 ),
               ),
             ],
@@ -413,62 +388,137 @@ class _VoiceReportScreenState extends State<VoiceReportScreen> with TickerProvid
                 fontSize: 14,
               ),
             ),
+          if (!_isRecording && _confidence > 0 && !_isTextMode)
+            Text(
+              '${(_confidence * 100).toStringAsFixed(0)}% CONF',
+              style: const TextStyle(
+                color: MuhafizTheme.primaryEmerald,
+                fontFamily: 'JetBrains Mono',
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildGridBg() {
-    return Positioned.fill(
-      child: CustomPaint(
-        painter: _HUDGridPainter(),
+  Widget _buildWorkspace() {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF0D162B),
+        border: Border.all(color: MuhafizTheme.primaryEmerald.withOpacity(0.15)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Stack(
+          children: [
+            Positioned.fill(child: CustomPaint(painter: _HUDGridPainter())),
+            Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: _isLogged
+                    ? _buildSuccessView()
+                    : (_isTextMode ? _buildTextView() : _buildMicView()),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildVoiceCaptureView() {
+  Widget _buildTextView() {
     return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Icon(
+          LucideIcons.keyboard,
+          color: MuhafizTheme.primaryEmerald,
+          size: 32,
+        ),
+        const SizedBox(height: 12),
+        const Text(
+          'SECURE SIGNAL TEXT ENTRY',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.white,
+            fontFamily: 'JetBrains Mono',
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _textController,
+          maxLines: 4,
+          style: const TextStyle(color: Colors.white, fontSize: 13, fontFamily: 'JetBrains Mono'),
+          decoration: InputDecoration(
+            hintText: 'Enter incident details, location coordinates, or emergency descriptions here...',
+            hintStyle: const TextStyle(color: MuhafizTheme.mutedSlate, fontSize: 11),
+            fillColor: const Color(0xFF060E1A),
+            filled: true,
+            enabledBorder: OutlineInputBorder(
+              borderSide: BorderSide(color: MuhafizTheme.primaryEmerald.withOpacity(0.3)),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderSide: const BorderSide(color: MuhafizTheme.primaryEmerald),
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+        ),
+        const SizedBox(height: 18),
+        ElevatedButton.icon(
+          onPressed: _isSubmitting ? null : _submitTextReport,
+          icon: const Icon(LucideIcons.send, size: 14),
+          label: const Text(
+            'TRANSMIT EMERGENCY SIGNAL',
+            style: TextStyle(fontFamily: 'JetBrains Mono', fontWeight: FontWeight.bold, fontSize: 11),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: MuhafizTheme.primaryEmerald,
+            foregroundColor: const Color(0xFF003824),
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMicView() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
         if (_isRecording) ...[
-          // Bouncing Audio Bars
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildWaveformBar(20, 0),
-              _buildWaveformBar(40, 1),
-              _buildWaveformBar(70, 2),
-              _buildWaveformBar(90, 3),
-              _buildWaveformBar(60, 4),
-              _buildWaveformBar(80, 5),
-              _buildWaveformBar(40, 6),
-              _buildWaveformBar(20, 7),
-            ],
-          ),
-          const SizedBox(height: 40),
+          _buildLiveWaveform(),
+          const SizedBox(height: 36),
         ] else if (_isSubmitting) ...[
-          // Scanning Radar Ring
           SizedBox(
-            width: 140,
-            height: 140,
+            width: 120,
+            height: 120,
             child: Stack(
               alignment: Alignment.center,
               children: [
                 const SizedBox(
-                  width: 100,
-                  height: 100,
+                  width: 90,
+                  height: 90,
                   child: CircularProgressIndicator(
                     color: Colors.amber,
                     strokeWidth: 3,
                   ),
                 ),
-                Icon(LucideIcons.binary, color: Colors.amber.withOpacity(0.8), size: 36),
+                Icon(LucideIcons.binary,
+                    color: Colors.amber.withOpacity(0.8), size: 32),
               ],
             ),
           ),
-          const SizedBox(height: 20),
-          Text(
-            'COUNCIL INTELLIGENCE ANALYZING EVENT...',
+          const SizedBox(height: 16),
+          const Text(
+            'COUNCIL INTELLIGENCE PARSING...',
             style: TextStyle(
               color: Colors.amber,
               fontFamily: 'JetBrains Mono',
@@ -476,99 +526,158 @@ class _VoiceReportScreenState extends State<VoiceReportScreen> with TickerProvid
               fontWeight: FontWeight.bold,
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 24),
         ] else ...[
-          // Standard Awaiting View
-          const Icon(
-            LucideIcons.radioTower,
+          Icon(
+            _speechAvailable ? LucideIcons.radioTower : LucideIcons.wifiOff,
             color: MuhafizTheme.mutedSlate,
-            size: 40,
+            size: 36,
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
         ],
-        
-        if (!_isSubmitting) ...[
-          // GIANT MIC GESTURE BUTTON
+
+        if (!_isSubmitting)
           GestureDetector(
             onLongPressStart: (_) => _startRecording(),
-            onLongPressEnd: (_) => _stopRecordingAndSubmit(),
+            onLongPressEnd: (_) => _stopAndSubmit(),
             child: AnimatedScale(
-              scale: _isRecording ? 1.15 : 1.0,
+              scale: _isRecording ? 1.12 : 1.0,
               duration: const Duration(milliseconds: 200),
               child: Container(
-                width: 140,
-                height: 140,
+                width: 130,
+                height: 130,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: _isRecording 
-                      ? const Color(0xFFEF4444).withOpacity(0.15) 
+                  color: _isRecording
+                      ? const Color(0xFFEF4444).withOpacity(0.12)
                       : MuhafizTheme.primaryEmerald.withOpacity(0.08),
                   border: Border.all(
-                    color: _isRecording ? const Color(0xFFEF4444) : MuhafizTheme.primaryEmerald,
+                    color: _isRecording
+                        ? const Color(0xFFEF4444)
+                        : MuhafizTheme.primaryEmerald,
                     width: 2.5,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: _isRecording 
-                          ? const Color(0xFFEF4444).withOpacity(0.4) 
+                      color: _isRecording
+                          ? const Color(0xFFEF4444).withOpacity(0.35)
                           : MuhafizTheme.primaryEmerald.withOpacity(0.2),
-                      blurRadius: _isRecording ? 30 : 15,
+                      blurRadius: _isRecording ? 28 : 14,
                       spreadRadius: 2,
                     ),
                   ],
                 ),
                 child: Center(
                   child: Container(
-                    width: 116,
-                    height: 116,
+                    width: 108,
+                    height: 108,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: _isRecording ? const Color(0xFFEF4444) : MuhafizTheme.primaryEmerald,
+                      color: _isRecording
+                          ? const Color(0xFFEF4444)
+                          : MuhafizTheme.primaryEmerald,
                     ),
                     child: Icon(
                       _isRecording ? LucideIcons.mic : LucideIcons.micOff,
-                      color: _isRecording ? Colors.white : const Color(0xFF003824),
-                      size: 44,
+                      color: _isRecording
+                          ? Colors.white
+                          : const Color(0xFF003824),
+                      size: 40,
                     ),
                   ),
                 ),
               ),
             ),
           ),
-          const SizedBox(height: 32),
-          
+
+        if (!_isSubmitting) ...[
+          const SizedBox(height: 24),
           Text(
-            _isRecording ? 'RELEASE TO TRANSMIT CRITICAL SIGNAL' : 'HOLD TO INGEST EMERGENCY VOICE',
+            _isRecording
+                ? 'RELEASE TO TRANSMIT'
+                : _speechAvailable
+                    ? 'HOLD TO RECORD EMERGENCY VOICE'
+                    : 'MIC UNAVAILABLE — CHECK PERMISSIONS',
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: _isRecording ? const Color(0xFFEF4444) : Colors.white,
+              color: _isRecording
+                  ? const Color(0xFFEF4444)
+                  : _speechAvailable
+                      ? Colors.white
+                      : Colors.amber,
               fontFamily: 'JetBrains Mono',
-              fontSize: 12,
+              fontSize: 11,
               fontWeight: FontWeight.bold,
               letterSpacing: 0.5,
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            _isRecording 
-                ? 'Your voice signal is being streaming directly into Sentinel-1 Reasoning Node.'
-                : 'Muhafiz-X requires continuous physical press to secure emergency satellite channel.',
+            _isRecording
+                ? 'Speak clearly — Muhafiz STT is transcribing your signal in real-time.'
+                : 'Speak in Urdu or English. Your voice is parsed by the Sentinel Reasoning Agent.',
             textAlign: TextAlign.center,
-            style: TextStyle(
+            style: const TextStyle(
               color: MuhafizTheme.mutedSlate,
               fontSize: 11,
               height: 1.4,
             ),
           ),
+          if (!_speechAvailable && !_speechInitializing) ...[
+            const SizedBox(height: 20),
+            OutlinedButton.icon(
+              onPressed: _initSpeech,
+              icon: const Icon(LucideIcons.refreshCw, size: 14),
+              label: const Text('RETRY INIT',
+                  style: TextStyle(fontFamily: 'JetBrains Mono', fontSize: 11)),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.amber,
+                side: const BorderSide(color: Colors.amber),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+              ),
+            ),
+          ],
         ],
       ],
+    );
+  }
+
+  Widget _buildLiveWaveform() {
+    return AnimatedBuilder(
+      animation: _waveController,
+      builder: (context, _) {
+        final bars = [18.0, 36.0, 60.0, 80.0, 55.0, 72.0, 38.0, 18.0];
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: bars.asMap().entries.map((e) {
+            final double multiplier =
+                0.35 + 0.65 * (e.key.isEven ? _waveController.value : 1.0 - _waveController.value);
+            return Container(
+              width: 6,
+              height: e.value * multiplier,
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEF4444),
+                borderRadius: BorderRadius.circular(3),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFEF4444).withOpacity(0.4),
+                    blurRadius: 4,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        );
+      },
     );
   }
 
   Widget _buildSuccessView() {
     return FadeIn(
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Container(
             padding: const EdgeInsets.all(16),
@@ -580,16 +689,17 @@ class _VoiceReportScreenState extends State<VoiceReportScreen> with TickerProvid
             child: const Icon(
               LucideIcons.shieldAlert,
               color: MuhafizTheme.primaryEmerald,
-              size: 54,
+              size: 48,
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
           const Text(
             'SIGNAL INGESTION SUCCESSFUL',
+            textAlign: TextAlign.center,
             style: TextStyle(
               color: Colors.white,
               fontFamily: 'JetBrains Mono',
-              fontSize: 18,
+              fontSize: 16,
               fontWeight: FontWeight.bold,
               letterSpacing: 1.5,
             ),
@@ -608,49 +718,51 @@ class _VoiceReportScreenState extends State<VoiceReportScreen> with TickerProvid
                 color: MuhafizTheme.primaryEmerald,
                 fontFamily: 'JetBrains Mono',
                 fontWeight: FontWeight.bold,
-                fontSize: 16,
+                fontSize: 15,
                 letterSpacing: 2,
               ),
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
           const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16.0),
+            padding: EdgeInsets.symmetric(horizontal: 8),
             child: Text(
               'The Sentinel Reasoning Agent has successfully parsed your signal. The 7-Agent Council is reviewing this dispatch in real-time.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: MuhafizTheme.mutedSlate,
-                fontSize: 12,
+                fontSize: 11,
                 height: 1.5,
               ),
             ),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 28),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               OutlinedButton.icon(
-                onPressed: _resetScreen,
-                icon: const Icon(LucideIcons.refreshCw, size: 16),
-                label: const Text('TRANSMIT NEW'),
+                onPressed: _reset,
+                icon: const Icon(LucideIcons.refreshCw, size: 14),
+                label: const Text('NEW SIGNAL',
+                    style: TextStyle(fontFamily: 'JetBrains Mono', fontSize: 11)),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: MuhafizTheme.primaryEmerald,
                   side: const BorderSide(color: MuhafizTheme.primaryEmerald),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 12),
               ElevatedButton.icon(
                 onPressed: () => Navigator.pop(context),
-                icon: const Icon(LucideIcons.activity, size: 16),
-                label: const Text('VIEW IN PULSE'),
+                icon: const Icon(LucideIcons.activity, size: 14),
+                label: const Text('VIEW IN PULSE',
+                    style: TextStyle(fontFamily: 'JetBrains Mono', fontSize: 11)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: MuhafizTheme.primaryEmerald,
                   foregroundColor: const Color(0xFF003824),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 ),
               ),
             ],
@@ -660,27 +772,28 @@ class _VoiceReportScreenState extends State<VoiceReportScreen> with TickerProvid
     );
   }
 
-  Widget _buildTelemetryBox() {
+  Widget _buildTranscriptionBox() {
     return Container(
-      height: 130,
+      constraints: const BoxConstraints(minHeight: 100, maxHeight: 140),
+      margin: const EdgeInsets.fromLTRB(20, 10, 20, 16),
       decoration: BoxDecoration(
         color: const Color(0xFF060E1A),
         border: Border.all(color: MuhafizTheme.primaryEmerald.withOpacity(0.15)),
         borderRadius: BorderRadius.circular(4),
       ),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'LIVE TRANSCRIPTION FEED',
-                style: TextStyle(
+              Text(
+                _isTextMode ? 'LIVE CONSOLE OUTPUT' : 'LIVE TRANSCRIPTION FEED',
+                style: const TextStyle(
                   color: MuhafizTheme.primaryEmerald,
                   fontFamily: 'JetBrains Mono',
-                  fontSize: 10,
+                  fontSize: 9,
                   fontWeight: FontWeight.bold,
                   letterSpacing: 1.5,
                 ),
@@ -695,13 +808,13 @@ class _VoiceReportScreenState extends State<VoiceReportScreen> with TickerProvid
                       shape: BoxShape.circle,
                     ),
                   ),
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 5),
                   Text(
-                    _isRecording ? 'STREAMING...' : 'STANDBY',
+                    _isRecording ? 'LIVE STT' : 'STANDBY',
                     style: TextStyle(
                       color: _isRecording ? Colors.red : MuhafizTheme.primaryEmerald,
                       fontFamily: 'JetBrains Mono',
-                      fontSize: 9,
+                      fontSize: 8,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -709,19 +822,25 @@ class _VoiceReportScreenState extends State<VoiceReportScreen> with TickerProvid
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           const Divider(color: Color(0xFF13233F), height: 1),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Expanded(
             child: SingleChildScrollView(
               child: Text(
-                _transcribedText.isEmpty 
-                    ? (_isSubmitting ? 'SECURE COGNITIVE PARSING EN ROUTE...' : 'HOLD PRESS TO INITIALIZE EMISSIVE SPEECH TRANSCRIBER...')
-                    : _transcribedText,
+                _transcribedText.isNotEmpty
+                    ? _transcribedText
+                    : _isSubmitting
+                        ? 'PARSING COGNITIVE SIGNAL...'
+                        : _isLogged
+                            ? 'Signal archived to Sentinel audit log.'
+                            : _isTextMode
+                                ? 'Type emergency details above and hit transmit to send directly to the Sentinel Council...'
+                                : 'Hold the mic button and speak your emergency report in Urdu or English...',
                 style: TextStyle(
-                  color: _transcribedText.isEmpty ? MuhafizTheme.mutedSlate : Colors.white,
+                  color: _transcribedText.isNotEmpty ? Colors.white : MuhafizTheme.mutedSlate,
                   fontFamily: 'JetBrains Mono',
-                  fontSize: 12,
+                  fontSize: 11,
                   height: 1.5,
                 ),
               ),
@@ -742,33 +861,32 @@ class _PulseDot extends StatefulWidget {
 }
 
 class _PulseDotState extends State<_PulseDot> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
+  late AnimationController _c;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: const Duration(seconds: 1))..repeat(reverse: true);
+    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 800))
+      ..repeat(reverse: true);
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _c.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return FadeTransition(
-      opacity: Tween(begin: 0.3, end: 1.0).animate(_controller),
+      opacity: Tween(begin: 0.3, end: 1.0).animate(_c),
       child: Container(
         width: 10,
         height: 10,
         decoration: BoxDecoration(
           color: widget.color,
           shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(color: widget.color, blurRadius: 4),
-          ],
+          boxShadow: [BoxShadow(color: widget.color, blurRadius: 5)],
         ),
       ),
     );
@@ -778,24 +896,18 @@ class _PulseDotState extends State<_PulseDot> with SingleTickerProviderStateMixi
 class _HUDGridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
-    final Paint gridPaint = Paint()
+    final p = Paint()
       ..color = MuhafizTheme.primaryEmerald.withOpacity(0.04)
-      ..strokeWidth = 1.0;
-
-    const double step = 24.0;
-    
-    // Vertical lines
+      ..strokeWidth = 1;
+    const step = 24.0;
     for (double x = 0; x < size.width; x += step) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), p);
     }
-    
-    // Horizontal lines
     for (double y = 0; y < size.height; y += step) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), p);
     }
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant CustomPainter old) => false;
 }
-

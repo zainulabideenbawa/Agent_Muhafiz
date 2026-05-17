@@ -3,6 +3,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/theme.dart';
 import '../services/api_service.dart';
 import '../widgets/feedback_widgets.dart';
@@ -14,141 +17,204 @@ class SafeRoutesMapScreen extends StatefulWidget {
   State<SafeRoutesMapScreen> createState() => _SafeRoutesMapScreenState();
 }
 
-class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with SingleTickerProviderStateMixin {
-  late AnimationController _radarController;
+class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with TickerProviderStateMixin {
+  final MapController _mapController = MapController();
+  
   List<Map<String, dynamic>> _activeCrises = [];
   bool _isLoading = false;
-  double _zoomScale = 1.0;
+  double _zoomLevel = 14.0;
   bool _evacuationPathwayConverged = true;
-  String _currentSector = "GULSHAN-E-IQBAL, SEC-4";
   
-  // Center of our radar grid
-  final Offset _citizenPosition = const Offset(0.0, 0.0);
-  
-  // Safe Destination Point
-  final Offset _safeHubPosition = const Offset(150.0, -180.0);
+  // Geolocation states
+  String _province = "Sindh";
+  String _city = "Karachi";
+  String _district = "Karachi East";
+  String _area = "Gulshan-e-Iqbal";
+  String _landmark = "Nipa Chowk";
 
-  // Fallback preset incidents in case backend is empty
-  final List<Map<String, dynamic>> _presetIncidents = [
-    {
-      'id': 'MHFZ-4821',
-      'title': 'FIRE OUTBREAK',
-      'location': 'Block 4 Market',
-      'coordinate': const Offset(-80.0, -50.0),
-      'radius': 60.0,
-      'severity': 'HIGH',
-      'details': 'Commercial market fire. Air quality compromised.',
-      'confidence': 0.94,
-    },
-    {
-      'id': 'MHFZ-9023',
-      'title': 'ARMED ROBBERY / POLICE CORDON',
-      'location': 'Main Boulevard',
-      'coordinate': const Offset(60.0, 80.0),
-      'radius': 45.0,
-      'severity': 'CRITICAL',
-      'details': 'Active gunshots reported near Main Boulevard.',
-      'confidence': 0.88,
-    },
-    {
-      'id': 'MHFZ-1108',
-      'title': 'GAS CYLINDER BLAST',
-      'location': 'Sector 3 Commercial',
-      'coordinate': const Offset(-120.0, 110.0),
-      'radius': 50.0,
-      'severity': 'HIGH',
-      'details': 'Building collapse. Rescue units dispatched.',
-      'confidence': 0.96,
+  // Coordinates
+  LatLng _citizenLatLng = const LatLng(24.9184, 67.0971); // Nipa Chowk
+  LatLng _safeHubLatLng = const LatLng(24.9036, 67.0620); // Hassan Square Chowk (Safe Hub)
+
+  // Threat bypass route segments
+  List<LatLng> _routePoints = [];
+
+  // Deterministic area geocoder mapping areas to Karachi coordinates
+  static const Map<String, LatLng> _geoMap = {
+    'Nipa Chowk': LatLng(24.9184, 67.0971),
+    'Hassan Square Chowk': LatLng(24.9036, 67.0620),
+    'Disco Bakery Chowk': LatLng(24.9150, 67.0930),
+    'Gulshan-e-Iqbal': LatLng(24.9180, 67.0971),
+    'Jauhar Chowrangi': LatLng(24.9126, 67.1226),
+    'Kamran Chowrangi': LatLng(24.9183, 67.1290),
+    'Perfume Chowk': LatLng(24.9080, 67.1190),
+    'Gulistan-e-Jauhar': LatLng(24.9123, 67.1234),
+    'Teen Talwar': LatLng(24.8436, 67.0336),
+    'Do Talwar': LatLng(24.8398, 67.0315),
+    'Schon Circle': LatLng(24.8290, 67.0360),
+    'Clifton': LatLng(24.8138, 67.0336),
+    'Karachi': LatLng(24.9000, 67.0900),
+  };
+
+  LatLng _geocode(String name) {
+    for (final entry in _geoMap.entries) {
+      if (name.toLowerCase().contains(entry.key.toLowerCase())) {
+        return entry.value;
+      }
     }
-  ];
+    // Return deterministic coordinate based on name hash so it's placed in Karachi
+    final int hash = name.hashCode;
+    final double latOffset = (hash % 100) / 2000.0 - 0.025;
+    final double lngOffset = ((hash >> 4) % 100) / 2000.0 - 0.025;
+    return LatLng(24.9180 + latOffset, 67.0971 + lngOffset);
+  }
 
   @override
   void initState() {
     super.initState();
-    _radarController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 4),
-    )..repeat();
+    _loadUserLocation();
     _fetchLiveIncidents();
   }
 
-  @override
-  void dispose() {
-    _radarController.dispose();
-    super.dispose();
+  Future<void> _loadUserLocation() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _province = prefs.getString('province') ?? _province;
+      _city = prefs.getString('city') ?? _city;
+      _district = prefs.getString('district') ?? _district;
+      _area = prefs.getString('area') ?? _area;
+      _landmark = prefs.getString('landmark') ?? _landmark;
+      
+      _citizenLatLng = _geocode(_landmark);
+      _safeHubLatLng = _geocode('Hassan Square Chowk');
+    });
   }
 
   Future<void> _fetchLiveIncidents() async {
-    setState(() => _isLoading = true);
+    if (mounted) setState(() => _isLoading = true);
     try {
       final response = await ApiService.get('/incidents');
-      if (response['success'] && response['data'] != null && (response['data'] as List).isNotEmpty) {
+      if (response['success'] == true && response['data'] != null) {
         final List<dynamic> rawList = response['data'];
         List<Map<String, dynamic>> mappedList = [];
         
-        // Map backend incidents to visual coordinates dynamically
-        for (int i = 0; i < rawList.length; i++) {
-          final item = rawList[i];
+        for (final item in rawList) {
+          if (item['status'] == 'RESOLVED') continue;
+
           final String title = (item['type'] ?? 'CRISIS').toString().toUpperCase();
           final String locationName = (item['location'] ?? 'ANALYZING').toString();
+          final String desc = item['description'] ?? 'Analyst Agent scanning area.';
+          final String incidentId = item['incident_id'] ?? 'MHFZ-0000';
           
-          // Generate deterministic coordinates scattered around center based on incident id / hash
-          final int idHash = (item['incident_id'] ?? '').toString().hashCode;
-          final double angle = (idHash % 360) * math.pi / 180;
-          final double distance = 60.0 + (idHash % 140);
-          final Offset coordinate = Offset(
-            math.cos(angle) * distance,
-            math.sin(angle) * distance,
-          );
-          
-          // Radius based on incident state or default
-          double radius = 40.0;
-          if (item['status'] == 'CONFIRMED') radius = 65.0;
-          if (item['status'] == 'RESOLVED') continue; // Hide resolved issues
-          
-          final double confidence = item['data']?['confidence']?.toDouble() ?? 0.85;
+          final LatLng coord = _geocode(locationName);
+          final double confidence = (item['data']?['confidence'] ?? 0.85).toDouble();
 
           mappedList.add({
-            'id': item['incident_id'] ?? 'MHFZ-0000',
+            'id': incidentId,
             'title': title,
             'location': locationName,
-            'coordinate': coordinate,
-            'radius': radius,
-            'severity': item['status'] == 'CRITICAL' ? 'CRITICAL' : 'HIGH',
-            'details': item['description'] ?? 'Analyst Agent scanning area.',
+            'coordinate': coord,
+            'radius': item['status'] == 'CONFIRMED' ? 450.0 : 300.0, // meters radius
+            'severity': item['status'] == 'CRITICAL' || title.contains('BLAST') ? 'CRITICAL' : 'HIGH',
+            'details': desc,
             'confidence': confidence,
           });
         }
         
         setState(() {
-          _activeCrises = mappedList.isEmpty ? _presetIncidents : mappedList;
+          _activeCrises = mappedList;
           _isLoading = false;
         });
+        _calculateEvacuationRoute();
       } else {
-        // Fallback to preset high-fidelity mock data if no server data
-        setState(() {
-          _activeCrises = _presetIncidents;
-          _isLoading = false;
-        });
+        _loadPresets();
       }
     } catch (e) {
-      setState(() {
-        _activeCrises = _presetIncidents;
-        _isLoading = false;
-      });
+      _loadPresets();
     }
   }
 
-  void _recalculateRoute() {
+  void _loadPresets() {
     setState(() {
-      _evacuationPathwayConverged = false;
+      _activeCrises = [
+        {
+          'id': 'MHFZ-4821',
+          'title': 'FIRE OUTBREAK',
+          'location': 'Disco Bakery Chowk',
+          'coordinate': _geocode('Disco Bakery Chowk'),
+          'radius': 350.0,
+          'severity': 'HIGH',
+          'details': 'Commercial market fire. Air quality compromised.',
+          'confidence': 0.94,
+        },
+        {
+          'id': 'MHFZ-9023',
+          'title': 'POLICE CORDON',
+          'location': 'Kamran Chowrangi',
+          'coordinate': _geocode('Kamran Chowrangi'),
+          'radius': 400.0,
+          'severity': 'CRITICAL',
+          'details': 'Active investigation reported near main intersection.',
+          'confidence': 0.88,
+        }
+      ];
+      _isLoading = false;
     });
+    _calculateEvacuationRoute();
+  }
+
+  void _calculateEvacuationRoute() {
+    // Generate green bypass points avoiding threat circles
+    List<LatLng> points = [_citizenLatLng];
+    
+    // Add intermediates to bypass known crises dynamically
+    LatLng current = _citizenLatLng;
+    LatLng target = _safeHubLatLng;
+
+    // Simple routing bypass algorithm around the nearest active crisis
+    if (_activeCrises.isNotEmpty) {
+      for (final crisis in _activeCrises) {
+        final LatLng crisisCoord = crisis['coordinate'] as LatLng;
+        final double dist = _distanceBetween(current, crisisCoord);
+        if (dist < 800) {
+          // Dodge threat by creating a safe midpoint offset
+          final double avgLat = (current.latitude + target.latitude) / 2;
+          final double avgLng = (current.longitude + target.longitude) / 2;
+          // Offset slightly away from threat
+          final double offsetLat = avgLat + 0.004;
+          final double offsetLng = avgLng - 0.003;
+          points.add(LatLng(offsetLat, offsetLng));
+        }
+      }
+    }
+
+    points.add(target);
+    setState(() {
+      _routePoints = points;
+    });
+  }
+
+  double _distanceBetween(LatLng p1, LatLng p2) {
+    final double dLat = (p2.latitude - p1.latitude) * math.pi / 180;
+    final double dLng = (p2.longitude - p1.longitude) * math.pi / 180;
+    final double a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(p1.latitude * math.pi / 180) *
+            math.cos(p2.latitude * math.pi / 180) *
+            math.sin(dLng / 2) *
+            math.sin(dLng / 2);
+    final double c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+    return 6371000 * c; // meters
+  }
+
+  void _recalculateRoute() {
+    setState(() => _evacuationPathwayConverged = false);
     MuhafizFeedback.showToast("Bypassing Danger Zones...");
-    Timer(const Duration(milliseconds: 1200), () {
+    Timer(const Duration(milliseconds: 1000), () {
       if (mounted) {
         setState(() {
           _evacuationPathwayConverged = true;
         });
+        _calculateEvacuationRoute();
         MuhafizFeedback.showToast("Optimal Green Route Recalculated");
       }
     });
@@ -165,16 +231,14 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with SingleTi
             Expanded(
               child: Stack(
                 children: [
-                  _buildRadarGrid(),
+                  _buildMapView(),
                   _buildSideTelemetryOverlay(),
                   _buildZoomControls(),
                   if (_isLoading)
                     Container(
                       color: Colors.black.withOpacity(0.4),
                       child: const Center(
-                        child: CircularProgressIndicator(
-                          color: MuhafizTheme.primaryEmerald,
-                        ),
+                        child: CircularProgressIndicator(color: MuhafizTheme.primaryEmerald),
                       ),
                     ),
                 ],
@@ -227,9 +291,9 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with SingleTi
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  _currentSector,
+                  '${_area.toUpperCase()}, ${_city.toUpperCase()}',
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontSize: 18,
+                    fontSize: 16,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -246,32 +310,124 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with SingleTi
     );
   }
 
-  Widget _buildRadarGrid() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final center = Offset(constraints.maxWidth / 2, constraints.maxHeight / 2);
-        return GestureDetector(
-          onPanUpdate: (details) {
-            // Add slight interactive panning behavior
-          },
-          child: AnimatedBuilder(
-            animation: _radarController,
-            builder: (context, child) {
-              return CustomPaint(
-                size: Size(constraints.maxWidth, constraints.maxHeight),
-                painter: RadarMapPainter(
-                  sweepAngle: _radarController.value * 2 * math.pi,
-                  citizenCenter: center,
-                  crises: _activeCrises,
-                  safeHub: _safeHubPosition,
-                  zoomScale: _zoomScale,
-                  routeConverged: _evacuationPathwayConverged,
-                ),
-              );
-            },
+  Widget _buildMapView() {
+    // Collect threat zones
+    final List<CircleMarker> circleMarkers = [];
+    final List<Marker> markers = [
+      // Citizen location
+      Marker(
+        point: _citizenLatLng,
+        width: 40,
+        height: 40,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.blueAccent,
+            shape: BoxShape.circle,
+            border: Border.all(color: Colors.white, width: 2),
+            boxShadow: [BoxShadow(color: Colors.blueAccent.withOpacity(0.5), blurRadius: 8)],
           ),
-        );
-      },
+          child: const Icon(LucideIcons.user, color: Colors.white, size: 16),
+        ),
+      ),
+      // Safe Evacuation Hub location
+      Marker(
+        point: _safeHubLatLng,
+        width: 48,
+        height: 48,
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              decoration: BoxDecoration(
+                color: MuhafizTheme.primaryEmerald,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Text(
+                'SAFE HUB',
+                style: TextStyle(color: Colors.black, fontSize: 8, fontWeight: FontWeight.bold),
+              ),
+            ),
+            const Icon(LucideIcons.home, color: MuhafizTheme.primaryEmerald, size: 28),
+          ],
+        ),
+      ),
+    ];
+
+    for (final crisis in _activeCrises) {
+      final LatLng pos = crisis['coordinate'] as LatLng;
+      final bool isCritical = crisis['severity'] == 'CRITICAL';
+      final Color color = isCritical ? Colors.redAccent : Colors.orangeAccent;
+      
+      // Outer threat zone circle representation
+      circleMarkers.add(
+        CircleMarker(
+          point: pos,
+          radius: crisis['radius'] as double,
+          useRadiusInMeter: true,
+          color: color.withOpacity(0.12),
+          borderColor: color.withOpacity(0.4),
+          borderStrokeWidth: 2,
+        ),
+      );
+
+      // Warning Pins
+      markers.add(
+        Marker(
+          point: pos,
+          width: 50,
+          height: 50,
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                decoration: BoxDecoration(
+                  color: color,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+                child: Text(
+                  crisis['id'],
+                  style: const TextStyle(color: Colors.black, fontSize: 8, fontWeight: FontWeight.bold),
+                ),
+              ),
+              Icon(LucideIcons.alertTriangle, color: color, size: 22),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return FlutterMap(
+      mapController: _mapController,
+      options: MapOptions(
+        initialCenter: _citizenLatLng,
+        initialZoom: _zoomLevel,
+        maxZoom: 18.0,
+        minZoom: 10.0,
+      ),
+      children: [
+        // Premium Dark CartoDB Tiles
+        TileLayer(
+          urlTemplate: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+          subdomains: const ['a', 'b', 'c', 'd'],
+        ),
+        // Active Danger Zone Overlays
+        CircleLayer(circles: circleMarkers),
+        // Safe green bypass route polyline
+        if (_evacuationPathwayConverged && _routePoints.isNotEmpty)
+          PolylineLayer(
+            polylines: [
+              Polyline(
+                points: _routePoints,
+                strokeWidth: 5.0,
+                color: MuhafizTheme.primaryEmerald,
+                borderColor: MuhafizTheme.primaryEmerald.withOpacity(0.3),
+                borderStrokeWidth: 3.0,
+              ),
+            ],
+          ),
+        // Pins Layer
+        MarkerLayer(markers: markers),
+      ],
     );
   }
 
@@ -292,11 +448,13 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with SingleTi
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
+              const Text(
                 'HUD TELEMETRY',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                style: TextStyle(
                   color: MuhafizTheme.primaryEmerald,
                   fontWeight: FontWeight.bold,
+                  fontSize: 10,
+                  fontFamily: 'JetBrains Mono',
                 ),
               ),
               const Divider(color: Colors.white10, height: 12),
@@ -356,7 +514,8 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with SingleTi
             icon: LucideIcons.plus,
             onPressed: () {
               setState(() {
-                if (_zoomScale < 1.8) _zoomScale += 0.15;
+                _zoomLevel += 0.5;
+                _mapController.move(_mapController.camera.center, _zoomLevel);
               });
             },
           ),
@@ -365,7 +524,8 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with SingleTi
             icon: LucideIcons.minus,
             onPressed: () {
               setState(() {
-                if (_zoomScale > 0.6) _zoomScale -= 0.15;
+                _zoomLevel -= 0.5;
+                _mapController.move(_mapController.camera.center, _zoomLevel);
               });
             },
           ),
@@ -410,16 +570,18 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with SingleTi
               children: [
                 Text(
                   'CRISIS OVERLAYS IN RANGE (${_activeCrises.length})',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
+                    fontSize: 10,
                   ),
                 ),
-                Text(
+                const Text(
                   'SOURCE: ANALYST AGENT',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  style: TextStyle(
                     color: MuhafizTheme.primaryEmerald,
                     fontSize: 8,
+                    fontFamily: 'JetBrains Mono',
                   ),
                 ),
               ],
@@ -520,326 +682,5 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with SingleTi
         ],
       ),
     );
-  }
-}
-
-class RadarMapPainter extends CustomPainter {
-  final double sweepAngle;
-  final Offset citizenCenter;
-  final List<Map<String, dynamic>> crises;
-  final Offset safeHub;
-  final double zoomScale;
-  final bool routeConverged;
-
-  RadarMapPainter({
-    required this.sweepAngle,
-    required this.citizenCenter,
-    required this.crises,
-    required this.safeHub,
-    required this.zoomScale,
-    required this.routeConverged,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-    canvas.clipRect(rect);
-
-    // 1. Grid Background
-    final paintGrid = Paint()
-      ..color = MuhafizTheme.primaryEmerald.withOpacity(0.04)
-      ..strokeWidth = 1.0;
-    
-    const double gridSize = 40.0;
-    final double adjustedGridSize = gridSize * zoomScale;
-    
-    for (double x = 0; x < size.width; x += adjustedGridSize) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paintGrid);
-    }
-    for (double y = 0; y < size.height; y += adjustedGridSize) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paintGrid);
-    }
-
-    // 2. Concentric Radar Rings
-    final paintRing = Paint()
-      ..style = PaintingStyle.stroke
-      ..color = MuhafizTheme.primaryEmerald.withOpacity(0.12)
-      ..strokeWidth = 1.0;
-
-    final double maxRadius = math.max(size.width, size.height) * 0.8;
-    for (double radius = adjustedGridSize; radius < maxRadius; radius += adjustedGridSize * 1.5) {
-      canvas.drawCircle(citizenCenter, radius, paintRing);
-    }
-
-    // 3. Radar Sweep Line
-    final paintSweep = Paint()
-      ..style = PaintingStyle.stroke
-      ..color = MuhafizTheme.primaryEmerald.withOpacity(0.08)
-      ..strokeWidth = 2.0;
-
-    canvas.drawLine(
-      citizenCenter,
-      Offset(
-        citizenCenter.dx + maxRadius * math.cos(sweepAngle),
-        citizenCenter.dy + maxRadius * math.sin(sweepAngle),
-      ),
-      paintSweep,
-    );
-
-    // Glowing sweep gradient arch
-    final sweepRect = Rect.fromCircle(center: citizenCenter, radius: maxRadius);
-    final sweepGradient = SweepGradient(
-      center: Alignment.center,
-      startAngle: sweepAngle - 0.4,
-      endAngle: sweepAngle,
-      colors: [
-        MuhafizTheme.primaryEmerald.withOpacity(0.0),
-        MuhafizTheme.primaryEmerald.withOpacity(0.15),
-      ],
-      stops: const [0.0, 1.0],
-    );
-
-    final sweepBrush = Paint()
-      ..shader = sweepGradient.createShader(sweepRect)
-      ..style = PaintingStyle.fill;
-    
-    canvas.drawArc(
-      sweepRect,
-      sweepAngle - 0.4,
-      0.4,
-      true,
-      sweepBrush,
-    );
-
-    // 4. Draw Threat / Danger Polygons (circles of hazard)
-    for (final crisis in crises) {
-      final Offset coordinate = crisis['coordinate'] as Offset;
-      final double radius = (crisis['radius'] as double) * zoomScale;
-      final Offset targetCenter = Offset(
-        citizenCenter.dx + coordinate.dx * zoomScale,
-        citizenCenter.dy + coordinate.dy * zoomScale,
-      );
-
-      final bool isCritical = crisis['severity'] == 'CRITICAL';
-      final Color dangerColor = isCritical ? Colors.redAccent : Colors.orangeAccent;
-
-      // Pulsing threat background
-      final double pulse = 1.0 + 0.12 * math.sin(sweepAngle * 4);
-      final paintDangerFill = Paint()
-        ..color = dangerColor.withOpacity(0.15)
-        ..style = PaintingStyle.fill;
-      
-      canvas.drawCircle(targetCenter, radius * pulse, paintDangerFill);
-
-      // Threat borders
-      final paintDangerBorder = Paint()
-        ..color = dangerColor.withOpacity(0.4)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5;
-      
-      canvas.drawCircle(targetCenter, radius * pulse, paintDangerBorder);
-      
-      // Outer dashes/indicators
-      final paintDashes = Paint()
-        ..color = dangerColor.withOpacity(0.6)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.0;
-
-      for (double angle = 0; angle < 2 * math.pi; angle += math.pi / 4) {
-        final startOffset = Offset(
-          targetCenter.dx + (radius * pulse - 4) * math.cos(angle),
-          targetCenter.dy + (radius * pulse - 4) * math.sin(angle),
-        );
-        final endOffset = Offset(
-          targetCenter.dx + (radius * pulse + 4) * math.cos(angle),
-          targetCenter.dy + (radius * pulse + 4) * math.sin(angle),
-        );
-        canvas.drawLine(startOffset, endOffset, paintDashes);
-      }
-
-      // Draw red event label box/telemetry
-      final textPainter = TextPainter(
-        text: TextSpan(
-          text: crisis['id'],
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 7.5,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'JetBrains Mono',
-          ),
-        ),
-        textDirection: TextDirection.ltr,
-      )..layout();
-
-      final labelRect = Rect.fromLTWH(
-        targetCenter.dx - textPainter.width / 2 - 4,
-        targetCenter.dy - radius * pulse - 16,
-        textPainter.width + 8,
-        12,
-      );
-      
-      canvas.drawRect(
-        labelRect,
-        Paint()..color = dangerColor.withOpacity(0.85),
-      );
-      
-      textPainter.paint(
-        canvas,
-        Offset(labelRect.left + 4, labelRect.top + 1),
-      );
-    }
-
-    // 5. Draw Optimal Green Bypass Polyline
-    if (routeConverged) {
-      final paintRoute = Paint()
-        ..color = MuhafizTheme.primaryEmerald
-        ..strokeWidth = 3.0
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round;
-
-      final paintRouteGlow = Paint()
-        ..color = MuhafizTheme.primaryEmerald.withOpacity(0.3)
-        ..strokeWidth = 8.0
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round;
-
-      // Draw path navigating custom waypoints around threats to reach the Safe Hub
-      final List<Offset> pathPoints = [citizenCenter];
-      
-      // Calculate intermediates that bypass the circles
-      final Offset endPoint = Offset(
-        citizenCenter.dx + safeHub.dx * zoomScale,
-        citizenCenter.dy + safeHub.dy * zoomScale,
-      );
-
-      // Determine bypass waypoints based on active crises
-      Offset current = citizenCenter;
-      List<Offset> waypoints = [];
-
-      // Static bypass rules to cleanly dodge mock locations
-      waypoints.add(Offset(citizenCenter.dx - 20 * zoomScale, citizenCenter.dy - 80 * zoomScale));
-      waypoints.add(Offset(citizenCenter.dx + 60 * zoomScale, citizenCenter.dy - 130 * zoomScale));
-      
-      pathPoints.addAll(waypoints);
-      pathPoints.add(endPoint);
-
-      final Path routePath = Path();
-      routePath.moveTo(pathPoints.first.dx, pathPoints.first.dy);
-      for (int i = 1; i < pathPoints.length; i++) {
-        routePath.lineTo(pathPoints[i].dx, pathPoints[i].dy);
-      }
-
-      canvas.drawPath(routePath, paintRouteGlow);
-      canvas.drawPath(routePath, paintRoute);
-
-      // Draw dotted segments/vectors at coordinates
-      final paintDotted = Paint()
-        ..color = MuhafizTheme.primaryEmerald.withOpacity(0.6)
-        ..strokeWidth = 1.0;
-      
-      for (final pt in pathPoints) {
-        canvas.drawCircle(pt, 4.0, paintRoute);
-      }
-    }
-
-    // 6. Draw Safe Evacuation Hub Target Marker
-    final Offset targetHub = Offset(
-      citizenCenter.dx + safeHub.dx * zoomScale,
-      citizenCenter.dy + safeHub.dy * zoomScale,
-    );
-
-    final paintHub = Paint()
-      ..color = MuhafizTheme.primaryEmerald
-      ..style = PaintingStyle.fill;
-    
-    canvas.drawCircle(targetHub, 8.0, paintHub);
-
-    final paintHubOuter = Paint()
-      ..color = MuhafizTheme.primaryEmerald.withOpacity(0.3)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0;
-    
-    final double pulseScale = 1.4 + 0.3 * math.sin(sweepAngle * 6);
-    canvas.drawCircle(targetHub, 8.0 * pulseScale, paintHubOuter);
-
-    // Draw 'H' for Hub
-    final hubText = TextPainter(
-      text: const TextSpan(
-        text: 'H',
-        style: TextStyle(
-          color: Color(0xFF003824),
-          fontSize: 9.0,
-          fontWeight: FontWeight.bold,
-          fontFamily: 'JetBrains Mono',
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-
-    hubText.paint(
-      canvas,
-      Offset(targetHub.dx - hubText.width / 2, targetHub.dy - hubText.height / 2),
-    );
-
-    // Draw label for EVAC ZONE
-    final hubLabel = TextPainter(
-      text: const TextSpan(
-        text: 'SAFE ZONE H-1',
-        style: TextStyle(
-          color: MuhafizTheme.primaryEmerald,
-          fontSize: 8.5,
-          fontWeight: FontWeight.bold,
-          fontFamily: 'JetBrains Mono',
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-
-    hubLabel.paint(
-      canvas,
-      Offset(targetHub.dx - hubLabel.width / 2, targetHub.dy - 22.0),
-    );
-
-    // 7. Draw Citizen (User) Pulse Marker at center
-    final paintCitizen = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.fill;
-    
-    canvas.drawCircle(citizenCenter, 6.0, paintCitizen);
-
-    final paintCitizenOuter = Paint()
-      ..color = Colors.white.withOpacity(0.3)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-    
-    final double pulseCitizen = 1.3 + 0.35 * math.sin(sweepAngle * 5);
-    canvas.drawCircle(citizenCenter, 6.0 * pulseCitizen, paintCitizenOuter);
-
-    // Label for CITIZEN location
-    final citizenLabel = TextPainter(
-      text: const TextSpan(
-        text: 'MY POSITION',
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: 8.5,
-          fontWeight: FontWeight.bold,
-          fontFamily: 'JetBrains Mono',
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-
-    citizenLabel.paint(
-      canvas,
-      Offset(citizenCenter.dx - citizenLabel.width / 2, citizenCenter.dy + 12.0),
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant RadarMapPainter oldDelegate) {
-    return oldDelegate.sweepAngle != sweepAngle ||
-        oldDelegate.zoomScale != zoomScale ||
-        oldDelegate.crises != crises ||
-        oldDelegate.routeConverged != routeConverged;
   }
 }

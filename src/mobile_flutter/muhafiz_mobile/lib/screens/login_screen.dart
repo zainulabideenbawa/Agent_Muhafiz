@@ -77,6 +77,15 @@ class _LoginScreenState extends State<LoginScreen> {
         final mapUser = Map<String, dynamic>.from(user);
 
         final prefs = await SharedPreferences.getInstance();
+
+        // ── PERSIST SESSION ──────────────────────────────────
+        final String token = (res['token'] ?? '').toString();
+        await prefs.setString('auth_token', token);
+        await prefs.setString('user_name', (mapUser['name'] ?? '').toString());
+        await prefs.setString('user_nic', _nicController.text);
+        await prefs.setString('user_sector', (mapUser['sector'] ?? '').toString());
+        // ─────────────────────────────────────────────────────
+
         final bool isLocationOnboarded = prefs.getBool('location_onboarded') ?? false;
 
         if (mounted) {
