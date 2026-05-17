@@ -1,16 +1,12 @@
 import 'package:flutter/material.dart';
-import 'dart:convert';
-import 'dart:io';
-import 'package:http/http.dart' as http;
 import 'package:animate_do/animate_do.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+import 'package:glassmorphism_widgets/glassmorphism_widgets.dart';
+import '../theme/theme.dart';
 import 'voice_report_screen.dart';
+import 'profile_screen.dart';
 import 'council_hub_screen.dart';
 import 'gov_services_screen.dart';
-import 'profile_screen.dart';
-
-import '../services/socket_service.dart';
-import '../widgets/feedback_widgets.dart';
-import '../theme/theme.dart';
 
 class DashboardScreen extends StatefulWidget {
   final Map<String, dynamic>? user;
@@ -22,308 +18,265 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   int _selectedIndex = 0;
-  Map<String, dynamic>? areaData;
-  List<Map<String, dynamic>> liveTraces = [];
-  String currentStatus = "CONNECTING";
-  final ScrollController _traceScrollController = ScrollController();
-
-  @override
-  void initState() {
-    super.initState();
-    _connectToPulse();
-  }
-
-  void _connectToPulse() {
-    final host = Platform.isAndroid ? '10.0.2.2' : 'localhost';
-    SocketService.connect('http://$host:3001', (data) {
-      if (mounted) {
-        setState(() {
-          liveTraces.insert(0, data);
-          currentStatus = "LIVE";
-          if (liveTraces.length > 20) liveTraces.removeLast();
-        });
-      }
-    });
-
-    _fetchAreaVitals();
-  }
-
-
-  void _fetchAreaVitals() async {
-    final sector = widget.user?['living_sector'] ?? 'GULSHAN';
-    final host = Platform.isAndroid ? '10.0.2.2' : 'localhost';
-    try {
-      final res = await http.get(Uri.parse('http://$host:3001/api/area/pulse/$sector'));
-      if (res.statusCode == 200) {
-        setState(() => areaData = jsonDecode(res.body));
-      }
-    } catch (e) {
-      print("Vitals Error: $e");
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: MuhafizTheme.darkBg,
       body: IndexedStack(
         index: _selectedIndex,
         children: [
-          _HomeTab(user: widget.user, areaData: areaData, liveTraces: liveTraces, currentStatus: currentStatus),
-          CouncilHubScreen(user: widget.user),
+          _SentinelPulseTab(user: widget.user),
+          const CouncilHubScreen(),
           const GovServicesScreen(),
           ProfileScreen(user: widget.user),
         ],
       ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          border: Border(top: BorderSide(color: MuhafizTheme.darkBorder, width: 0.5)),
-        ),
-        child: BottomNavigationBar(
-          currentIndex: _selectedIndex,
-          onTap: (index) => setState(() => _selectedIndex = index),
-          backgroundColor: MuhafizTheme.darkBg,
-          type: BottomNavigationBarType.fixed,
-          selectedItemColor: MuhafizTheme.emerald400,
-          unselectedItemColor: MuhafizTheme.darkTextMuted,
-          selectedLabelStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
-          unselectedLabelStyle: const TextStyle(fontSize: 10),
-          items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.analytics_outlined), label: 'PULSE'),
-            BottomNavigationBarItem(icon: Icon(Icons.gavel_outlined), label: 'COUNCIL'),
-            BottomNavigationBarItem(icon: Icon(Icons.grid_view_outlined), label: 'SERVICES'),
-            BottomNavigationBarItem(icon: Icon(Icons.person_outline), label: 'PROFILE'),
-          ],
-        ),
+      bottomNavigationBar: _buildBottomNav(),
+      floatingActionButton: _selectedIndex == 0
+          ? FloatingActionButton(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const VoiceReportScreen()),
+              ),
+              backgroundColor: MuhafizTheme.primaryEmerald,
+              elevation: 12,
+              child: const Icon(LucideIcons.mic, color: Color(0xFF003824)),
+            )
+          : null,
+    );
+  }
+
+  Widget _buildBottomNav() {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: MuhafizTheme.primaryEmerald.withOpacity(0.1))),
       ),
-      floatingActionButton: _selectedIndex == 0 ? FloatingActionButton(
-        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const VoiceReportScreen())),
-        backgroundColor: MuhafizTheme.emerald500,
-        child: const Icon(Icons.mic, color: Colors.white),
-      ) : null,
+      child: BottomNavigationBar(
+        currentIndex: _selectedIndex,
+        onTap: (index) => setState(() => _selectedIndex = index),
+        type: BottomNavigationBarType.fixed,
+        backgroundColor: MuhafizTheme.backgroundSlate,
+        selectedItemColor: MuhafizTheme.primaryEmerald,
+        unselectedItemColor: MuhafizTheme.mutedSlate,
+        selectedLabelStyle: Theme.of(context).textTheme.labelSmall?.copyWith(color: MuhafizTheme.primaryEmerald),
+        unselectedLabelStyle: Theme.of(context).textTheme.labelSmall,
+        items: const [
+          BottomNavigationBarItem(icon: Icon(LucideIcons.activity, size: 20), label: 'PULSE'),
+          BottomNavigationBarItem(icon: Icon(LucideIcons.users, size: 20), label: 'COUNCIL'),
+          BottomNavigationBarItem(icon: Icon(LucideIcons.layoutGrid, size: 20), label: 'HUB'),
+          BottomNavigationBarItem(icon: Icon(LucideIcons.shield, size: 20), label: 'VAULT'),
+        ],
+      ),
     );
   }
 }
 
-class _HomeTab extends StatelessWidget {
+class _SentinelPulseTab extends StatelessWidget {
   final Map<String, dynamic>? user;
-  final Map<String, dynamic>? areaData;
-  final List<Map<String, dynamic>> liveTraces;
-  final String currentStatus;
-
-  const _HomeTab({this.user, this.areaData, required this.liveTraces, required this.currentStatus});
+  const _SentinelPulseTab({this.user});
 
   @override
   Widget build(BuildContext context) {
     return CustomScrollView(
       slivers: [
-        SliverAppBar(
-          expandedHeight: 140,
-          backgroundColor: MuhafizTheme.darkBg,
-          floating: true,
-          flexibleSpace: FlexibleSpaceBar(
-            titlePadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-            title: FadeInDown(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.end,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('GOOD MORNING,', style: TextStyle(color: MuhafizTheme.emerald400, fontSize: 10, letterSpacing: 2, fontWeight: FontWeight.bold)),
-                  Text(user?['name']?.toUpperCase() ?? 'CITIZEN', style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                ],
-              ),
+        _buildAppBar(context),
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildSectionHeader(context, 'AREA VITALS', 'SECTOR: GULSHAN-E-IQBAL'),
+                const SizedBox(height: 16),
+                _buildVitalsScroll(),
+                const SizedBox(height: 40),
+                _buildSectionHeader(context, 'SOVEREIGN BROADCAST', 'LIVE AGENT TELEMETRY'),
+                const SizedBox(height: 16),
+                _buildTerminalFeed(),
+                const SizedBox(height: 100),
+              ],
             ),
           ),
-          actions: [
-            Padding(
-              padding: const EdgeInsets.only(right: 24, top: 16),
-              child: _StatusBadge(status: currentStatus),
-            ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAppBar(BuildContext context) {
+    return SliverAppBar(
+      expandedHeight: 120,
+      floating: true,
+      backgroundColor: MuhafizTheme.backgroundSlate,
+      flexibleSpace: FlexibleSpaceBar(
+        background: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'WELCOME BACK,',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(color: MuhafizTheme.primaryEmerald),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                user?['name']?.toUpperCase() ?? 'CITIZEN',
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        Padding(
+          padding: const EdgeInsets.only(right: 24, top: 16),
+          child: _StatusIndicator(),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSectionHeader(BuildContext context, String title, String subtitle) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: Theme.of(context).textTheme.labelLarge),
+            Text(subtitle, style: Theme.of(context).textTheme.labelSmall),
           ],
         ),
+        Icon(LucideIcons.chevronRight, color: MuhafizTheme.primaryEmerald, size: 16),
+      ],
+    );
+  }
 
-        const SliverPadding(
-          padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          sliver: SliverToBoxAdapter(child: _SectionTitle(title: 'CITY VITALS')),
-        ),
+  Widget _buildVitalsScroll() {
+    final vitals = [
+      {'label': 'AIR QUALITY', 'value': '74 AQI', 'icon': LucideIcons.wind, 'color': Colors.green},
+      {'label': 'POWER GRID', 'value': 'STABLE', 'icon': LucideIcons.zap, 'color': Colors.amber},
+      {'label': 'WATER LEVEL', 'value': 'OPTIMAL', 'icon': LucideIcons.droplets, 'color': Colors.blue},
+      {'label': 'SECURITY', 'value': 'LOCKED', 'icon': LucideIcons.shieldCheck, 'color': MuhafizTheme.primaryEmerald},
+    ];
 
-        SliverPadding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          sliver: areaData == null 
-            ? SliverToBoxAdapter(
-                child: SizedBox(
-                  height: 120,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
-                    children: List.generate(4, (i) => MuhafizFeedback.skeletonCard()),
-                  ),
-                ),
-              )
-            : SliverGrid(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 16,
-                  crossAxisSpacing: 16,
-                  childAspectRatio: 1.4,
-                ),
-                delegate: SliverChildListDelegate([
-                  _VitalsCard(label: 'Water Supply', value: areaData?['vitals']?['water_timing'] ?? '--:--', icon: Icons.water_drop, color: Colors.blue),
-                  _VitalsCard(label: 'Road Status', value: 'Clear', icon: Icons.traffic, color: Colors.orange),
-                  _VitalsCard(label: 'Air Quality', value: '74 AQI', icon: Icons.air, color: Colors.green),
-                  _VitalsCard(label: 'Power Grid', value: 'Stable', icon: Icons.bolt, color: Colors.amber),
-                ]),
-              ),
-        ),
-
-        const SliverPadding(
-          padding: EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-          sliver: SliverToBoxAdapter(child: _SectionTitle(title: 'LIVE AGENT REASONING')),
-        ),
-
-        SliverPadding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          sliver: SliverToBoxAdapter(
+    return SizedBox(
+      height: 140,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        itemCount: vitals.length,
+        itemBuilder: (context, index) {
+          final item = vitals[index];
+          return FadeInRight(
+            delay: Duration(milliseconds: index * 100),
             child: Container(
-              height: 300,
+              width: 140,
+              margin: const EdgeInsets.only(right: 16),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: MuhafizTheme.darkCard,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: MuhafizTheme.darkBorder),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 40, offset: const Offset(0, 20)),
+                color: MuhafizTheme.surfaceSlate,
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: MuhafizTheme.primaryEmerald.withOpacity(0.1)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(item['icon'] as IconData, color: item['color'] as Color, size: 20),
+                  const Spacer(),
+                  Text(item['label'] as String, style: Theme.of(context).textTheme.labelSmall),
+                  const SizedBox(height: 4),
+                  Text(item['value'] as String, style: Theme.of(context).textTheme.labelLarge),
                 ],
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(24),
-                child: liveTraces.isEmpty
-                  ? _EmptyTraces()
-                  : ListView.builder(
-                      padding: const EdgeInsets.all(20),
-                      itemCount: liveTraces.length,
-                      itemBuilder: (context, index) => FadeInLeft(
-                        delay: Duration(milliseconds: index * 50),
-                        child: _TraceItem(trace: liveTraces[index]),
-                      ),
-                    ),
-              ),
             ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildTerminalFeed() {
+    final logs = [
+      {'agent': 'ANALST', 'msg': 'DETECTED ABNORMAL HEAT SIGNATURE IN SECTOR 4.'},
+      {'agent': 'ORACLE', 'msg': 'CROSS-REFERENCING WITH SOCIAL MEDIA TRENDS...'},
+      {'agent': 'SENTNL', 'msg': 'DISPATCHING VERIFICATION QUEST TO NEARBY OFFICER.'},
+      {'agent': 'SYS', 'msg': 'PROTOCOL MUHAFIZ-X ACTIVE.'},
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF060E20),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: MuhafizTheme.primaryEmerald.withOpacity(0.2)),
+      ),
+      child: Column(
+        children: logs.map((log) => Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '[${log['agent']}]',
+                style: const TextStyle(
+                  color: MuhafizTheme.primaryEmerald,
+                  fontFamily: 'JetBrains Mono',
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  log['msg']!,
+                  style: const TextStyle(
+                    color: MuhafizTheme.onSurface,
+                    fontFamily: 'JetBrains Mono',
+                    fontSize: 11,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+            ],
           ),
-        ),
-        
-        const SliverToBoxAdapter(child: SizedBox(height: 100)),
-      ],
+        )).toList(),
+      ),
     );
   }
 }
 
-class _StatusBadge extends StatelessWidget {
-  final String status;
-  const _StatusBadge({required this.status});
-
+class _StatusIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: MuhafizTheme.emerald500.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: MuhafizTheme.emerald500.withOpacity(0.3)),
+        color: MuhafizTheme.primaryEmerald.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: MuhafizTheme.primaryEmerald.withOpacity(0.3)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 6,
-            height: 6,
-            decoration: const BoxDecoration(color: MuhafizTheme.emerald500, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 8),
-          Text(status, style: const TextStyle(color: MuhafizTheme.emerald500, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
-        ],
-      ),
-    );
-  }
-}
-
-class _VitalsCard extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color color;
-
-  const _VitalsCard({required this.label, required this.value, required this.icon, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: MuhafizTheme.darkCard,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: MuhafizTheme.darkBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: color, size: 20),
-          const Spacer(),
-          Text(label, style: const TextStyle(color: MuhafizTheme.darkTextMuted, fontSize: 10, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 4),
-          Text(value, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
-        ],
-      ),
-    );
-  }
-}
-
-class _TraceItem extends StatelessWidget {
-  final Map<String, dynamic> trace;
-  const _TraceItem({required this.trace});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '[${trace['agent']?.toString().toUpperCase() ?? 'SYS'}]',
-            style: const TextStyle(color: MuhafizTheme.emerald400, fontFamily: 'JetBrains Mono', fontSize: 10, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              trace['message'] ?? '...',
-              style: const TextStyle(color: Colors.white, fontSize: 11, height: 1.4),
+            width: 8,
+            height: 8,
+            decoration: const BoxDecoration(
+              color: MuhafizTheme.primaryEmerald,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(color: MuhafizTheme.primaryEmerald, blurRadius: 4),
+              ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SectionTitle extends StatelessWidget {
-  final String title;
-  const _SectionTitle({required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(title, style: const TextStyle(color: MuhafizTheme.darkTextMuted, fontSize: 10, letterSpacing: 2, fontWeight: FontWeight.bold));
-  }
-}
-
-class _EmptyTraces extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.sensors_outlined, color: MuhafizTheme.darkBorder, size: 40),
-          const SizedBox(height: 16),
-          const Text('LISTENING FOR COUNCIL TRACES...', style: TextStyle(color: MuhafizTheme.darkBorder, fontSize: 10, letterSpacing: 1)),
+          const SizedBox(width: 8),
+          Text(
+            'SYSTEM LIVE',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: MuhafizTheme.primaryEmerald,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
         ],
       ),
     );

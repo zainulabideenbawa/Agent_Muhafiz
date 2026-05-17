@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:animate_do/animate_do.dart';
-import 'login_screen.dart';
+import 'package:lucide_icons/lucide_icons.dart';
 import '../theme/theme.dart';
+import 'login_screen.dart';
 import '../widgets/feedback_widgets.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -18,168 +19,211 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: MuhafizTheme.darkBg,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(32.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              FadeInDown(
-                child: const Text('SOVEREIGN IDENTITY', style: TextStyle(color: MuhafizTheme.emerald400, letterSpacing: 2, fontSize: 12, fontWeight: FontWeight.bold)),
-              ),
-              const SizedBox(height: 8),
-              FadeInDown(
-                delay: const Duration(milliseconds: 200),
-                child: const Text('Digital Vault', style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
-              ),
-              
-              const SizedBox(height: 48),
-              
-              // PROFILE AVATAR SECTION
-              Center(
-                child: ZoomIn(
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: LinearGradient(colors: [MuhafizTheme.emerald500, Colors.blue]),
-                    ),
-                    child: CircleAvatar(
-                      radius: 50,
-                      backgroundColor: MuhafizTheme.darkBg,
-                      child: Text(
-                        widget.user?['name']?[0]?.toUpperCase() ?? 'C',
-                        style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.white),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              
-              const SizedBox(height: 48),
-              
-              // IDENTITY CARD
-              FadeInUp(
-                delay: const Duration(milliseconds: 400),
-                child: Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: MuhafizTheme.darkCard,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: MuhafizTheme.darkBorder),
-                  ),
-                  child: Column(
-                    children: [
-                      _ProfileDetail(label: 'CITIZEN NAME', value: widget.user?['name'] ?? 'Unknown Citizen'),
-                      const Divider(color: MuhafizTheme.darkBorder, height: 32),
-                      _ProfileDetail(label: 'ASSIGNED SECTOR', value: widget.user?['living_sector'] ?? 'Not Set'),
-                      const Divider(color: MuhafizTheme.darkBorder, height: 32),
-                      
-                      // SECURE NIC TOGGLE
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('VERIFIED NIC', style: TextStyle(color: MuhafizTheme.darkTextMuted, fontSize: 10, fontWeight: FontWeight.bold)),
-                              const SizedBox(height: 4),
-                              Text(
-                                _showNIC ? (widget.user?['nic_number'] ?? 'N/A') : 'XXXXX-XXXXXXX-X',
-                                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, fontFamily: 'JetBrains Mono'),
-                              ),
-                            ],
-                          ),
-                          IconButton(
-                            onPressed: () => setState(() => _showNIC = !_showNIC),
-                            icon: Icon(_showNIC ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: MuhafizTheme.emerald400),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              
-              const SizedBox(height: 48),
-              
-              // ACTION MENU
-              FadeInUp(
-                delay: const Duration(milliseconds: 600),
-                child: Column(
-                  children: [
-                    _MenuButton(label: 'Security Settings', icon: Icons.security_outlined, onTap: () {}),
-                    _MenuButton(label: 'Language: English', icon: Icons.language_outlined, onTap: () {}),
-                    _MenuButton(label: 'Audit Privacy Policy', icon: Icons.help_outline_rounded, onTap: () {}),
-                    const SizedBox(height: 24),
-                    _MenuButton(
-                      label: 'Terminate Session', 
-                      icon: Icons.logout_rounded, 
-                      color: Colors.redAccent,
-                      onTap: () {
-                        MuhafizFeedback.showToast("Session Terminated Safely");
-                        Navigator.pushAndRemoveUntil(
-                          context, 
-                          MaterialPageRoute(builder: (context) => const LoginScreen()),
-                          (route) => false,
-                        );
-                      }
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: Text('IDENTITY VAULT', style: Theme.of(context).textTheme.labelLarge),
+        centerTitle: true,
       ),
-    );
-  }
-}
-
-class _ProfileDetail extends StatelessWidget {
-  final String label;
-  final String value;
-  const _ProfileDetail({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
           children: [
-            Text(label, style: const TextStyle(color: MuhafizTheme.darkTextMuted, fontSize: 10, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 4),
-            Text(value, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+            _buildTrustScore(),
+            const SizedBox(height: 40),
+            _buildProfileHeader(),
+            const SizedBox(height: 32),
+            _buildDataBlade('CITIZENSHIP DATA', [
+              {'label': 'LEGAL NAME', 'value': widget.user?['name'] ?? 'SOVEREIGN CITIZEN'},
+              {'label': 'NIC NUMBER', 'value': _showNIC ? '42101-1234567-1' : 'XXXXX-XXXXXXX-X', 'action': () => setState(() => _showNIC = !_showNIC)},
+              {'label': 'ACCOUNT ID', 'value': 'MUH-9928-AX'},
+            ]),
+            const SizedBox(height: 24),
+            _buildDataBlade('GEOSPATIAL ANCHOR', [
+              {'label': 'ASSIGNED SECTOR', 'value': 'GULSHAN-E-IQBAL, BLOCK 13'},
+              {'label': 'COUNCIL HUB', 'value': 'DISTRICT EAST - HUB 4'},
+            ]),
+            const SizedBox(height: 40),
+            _buildMenuSection(),
+            const SizedBox(height: 40),
+            _buildLogoutButton(),
+            const SizedBox(height: 40),
           ],
         ),
-      ],
+      ),
     );
   }
-}
 
-class _MenuButton extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-  final Color? color;
-
-  const _MenuButton({required this.label, required this.icon, required this.onTap, this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      onTap: onTap,
-      contentPadding: EdgeInsets.zero,
-      leading: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(color: (color ?? MuhafizTheme.emerald400).withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-        child: Icon(icon, color: color ?? MuhafizTheme.emerald400, size: 20),
+  Widget _buildTrustScore() {
+    return FadeInDown(
+      child: Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: MuhafizTheme.surfaceSlate,
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: MuhafizTheme.primaryEmerald.withOpacity(0.2)),
+        ),
+        child: Row(
+          children: [
+            Stack(
+              alignment: Alignment.center,
+              children: [
+                SizedBox(
+                  width: 80,
+                  height: 80,
+                  child: CircularProgressIndicator(
+                    value: 0.85,
+                    strokeWidth: 8,
+                    backgroundColor: MuhafizTheme.backgroundSlate,
+                    valueColor: const AlwaysStoppedAnimation<Color>(MuhafizTheme.primaryEmerald),
+                  ),
+                ),
+                Text(
+                  '85',
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    color: MuhafizTheme.primaryEmerald,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(width: 24),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('TRUST SCORE', style: Theme.of(context).textTheme.labelLarge),
+                  const SizedBox(height: 4),
+                  Text(
+                    'REPUTATION LEVEL: VETERAN',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(color: MuhafizTheme.primaryEmerald),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Higher scores grant priority in crisis resource allocation.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
-      title: Text(label, style: TextStyle(color: color ?? Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
-      trailing: const Icon(Icons.arrow_forward_ios, color: MuhafizTheme.darkBorder, size: 12),
+    );
+  }
+
+  Widget _buildProfileHeader() {
+    return FadeIn(
+      child: Column(
+        children: [
+          CircleAvatar(
+            radius: 50,
+            backgroundColor: MuhafizTheme.primaryEmerald.withOpacity(0.1),
+            child: Icon(LucideIcons.user2, size: 40, color: MuhafizTheme.primaryEmerald),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            widget.user?['name']?.toUpperCase() ?? 'CITIZEN',
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
+          Text(
+            'ACTIVE SINCE MAY 2024',
+            style: Theme.of(context).textTheme.labelSmall,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDataBlade(String title, List<Map<String, dynamic>> items) {
+    return FadeInUp(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 8),
+            child: Text(title, style: Theme.of(context).textTheme.labelSmall?.copyWith(letterSpacing: 2)),
+          ),
+          Container(
+            decoration: BoxDecoration(
+              color: MuhafizTheme.surfaceSlate,
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: MuhafizTheme.mutedSlate.withOpacity(0.1)),
+            ),
+            child: Column(
+              children: items.map((item) => Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  border: Border(bottom: BorderSide(color: MuhafizTheme.mutedSlate.withOpacity(0.05))),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(item['label'] as String, style: Theme.of(context).textTheme.labelSmall),
+                        const SizedBox(height: 4),
+                        Text(
+                          item['value'] as String,
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            fontFamily: 'JetBrains Mono',
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (item['action'] != null)
+                      IconButton(
+                        icon: const Icon(LucideIcons.eye, size: 18, color: MuhafizTheme.primaryEmerald),
+                        onPressed: item['action'] as VoidCallback,
+                      ),
+                  ],
+                ),
+              )).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMenuSection() {
+    final menuItems = [
+      {'label': 'BIO-SECURITY LOGS', 'icon': LucideIcons.fingerprint},
+      {'label': 'COUNCIL PERMISSIONS', 'icon': LucideIcons.key},
+      {'label': 'ENCRYPTION SETTINGS', 'icon': LucideIcons.lock},
+    ];
+
+    return Column(
+      children: menuItems.map((item) => ListTile(
+        leading: Icon(item['icon'] as IconData, size: 20, color: MuhafizTheme.mutedSlate),
+        title: Text(item['label'] as String, style: Theme.of(context).textTheme.labelMedium),
+        trailing: const Icon(LucideIcons.chevronRight, size: 16),
+        onTap: () {},
+      )).toList(),
+    );
+  }
+
+  Widget _buildLogoutButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: () {
+          MuhafizFeedback.showToast("SESSION TERMINATED");
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (context) => const LoginScreen()),
+            (route) => false,
+          );
+        },
+        icon: const Icon(LucideIcons.logOut, size: 18),
+        label: const Text('TERMINATE SESSION'),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: MuhafizTheme.errorRed,
+          side: const BorderSide(color: MuhafizTheme.errorRed),
+          padding: const EdgeInsets.symmetric(vertical: 16),
+        ),
+      ),
     );
   }
 }

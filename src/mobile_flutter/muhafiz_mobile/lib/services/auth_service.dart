@@ -27,6 +27,24 @@ class AuthService {
     return jsonDecode(response.body);
   }
 
+  static Future<Map<String, dynamic>> requestOtp(String nic) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/citizen/request-otp'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'nic': nic}),
+    );
+    return jsonDecode(response.body);
+  }
+
+  static Future<Map<String, dynamic>> verifyOtp(String nic, String otp) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/citizen/verify-otp'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'nic': nic, 'otp': otp}),
+    );
+    return jsonDecode(response.body);
+  }
+
   static Future<Map<String, dynamic>> login({
     required String nic,
     required String password,

@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'screens/login_screen.dart';
+import 'package:provider/provider.dart';
 import 'theme/theme.dart';
+import 'screens/login_screen.dart';
 
 void main() {
-  runApp(const MuhafizApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        // We will add providers here later
+      ],
+      child: const MuhafizApp(),
+    ),
+  );
 }
 
 class MuhafizApp extends StatelessWidget {
@@ -15,9 +22,7 @@ class MuhafizApp extends StatelessWidget {
     return MaterialApp(
       title: 'Muhafiz-Link',
       debugShowCheckedModeBanner: false,
-      theme: MuhafizTheme.darkTheme.copyWith(
-        textTheme: GoogleFonts.interTextTheme(MuhafizTheme.darkTheme.textTheme),
-      ),
+      theme: MuhafizTheme.darkTheme,
       home: const LoginScreen(),
     );
   }

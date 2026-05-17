@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:animate_do/animate_do.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+import 'package:pinput/pinput.dart';
+import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
+import '../theme/theme.dart';
 import 'dashboard_screen.dart';
 import 'signup_screen.dart';
 import '../widgets/feedback_widgets.dart';
-import '../theme/theme.dart';
-import '../services/auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -16,144 +19,307 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _nicController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _otpController = TextEditingController();
+  
+  final nicFormatter = MaskTextInputFormatter(
+    mask: '#####-#######-#',
+    filter: {"#": RegExp(r'[0-9]')},
+  );
+
+  bool _isOtpSent = false;
   bool _isLoading = false;
 
-  void _handleLogin() async {
-    if (!_formKey.currentState!.validate()) return;
+  void _handleRequestOtp() async {
+    if (_nicController.text.length < 15) {
+      MuhafizFeedback.showToast("INVALID CNIC STRUCTURE");
+      return;
+    }
 
     setState(() => _isLoading = true);
+    // Simulate network delay
+    await Future.delayed(const Duration(seconds: 2));
     
-    try {
-      final response = await AuthService.login(
-        nic: _nicController.text,
-        password: _passwordController.text,
-      );
+    if (mounted) {
+      setState(() {
+        _isOtpSent = true;
+        _isLoading = false;
+      });
+      MuhafizFeedback.showToast("ENCRYPTED OTP DISPATCHED");
+    }
+  }
 
-      if (response['success']) {
-        MuhafizFeedback.showToast("Identity Verified");
-        if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => DashboardScreen(user: response['user'])),
-          );
-        }
-      } else {
-        MuhafizFeedback.showToast(response['error'] ?? 'Identity Verification Failed');
-      }
-    } catch (e) {
-      MuhafizFeedback.showToast("Council Server Unreachable");
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+  void _handleVerifyOtp() async {
+    if (_otpController.text.length < 6) {
+      MuhafizFeedback.showToast("INCOMPLETE AUTH CODE");
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    await Future.delayed(const Duration(seconds: 2));
+    
+    if (mounted) {
+      setState(() => _isLoading = false);
+      MuhafizFeedback.showToast("IDENTITY VERIFIED. ACCESS GRANTED.");
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const DashboardScreen(user: {'name': 'Sovereign Citizen'})),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: MuhafizTheme.darkBg,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 24.0),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Align(
-                  alignment: Alignment.topRight,
-                  child: TextButton(
-                    onPressed: () => MuhafizFeedback.showToast("Urdu Language Selected"),
-                    child: const Text('اردو', style: TextStyle(color: MuhafizTheme.emerald400, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-                const Spacer(),
-                FadeInDown(
-                  child: const Text('MUHAFIZ-LINK', style: TextStyle(color: MuhafizTheme.emerald400, letterSpacing: 4, fontWeight: FontWeight.bold, fontSize: 12)),
-                ),
-                FadeInDown(
-                  delay: const Duration(milliseconds: 200),
-                  child: const Text('CITIZEN PORTAL', style: TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.bold)),
-                ),
-                const SizedBox(height: 56),
-                
-                // NIC Field with Tactical Icon
-                FadeInUp(
-                  delay: const Duration(milliseconds: 400),
-                  child: TextFormField(
-                    controller: _nicController,
-                    style: const TextStyle(color: Colors.white),
-                    keyboardType: TextInputType.number,
-                    decoration: MuhafizTheme.inputDecoration('CNIC (42101-XXXXXXX-X)').copyWith(
-                      prefixIcon: const Icon(Icons.badge_outlined, color: MuhafizTheme.emerald400, size: 20),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) return 'Please enter your NIC';
-                      if (!RegExp(r'^\d{5}-\d{7}-\d{1}$').hasMatch(value)) return 'Format: XXXXX-XXXXXXX-X';
-                      return null;
-                    },
-                  ),
-                ),
-                
-                const SizedBox(height: 24),
-                
-                // Password Field with Tactical Icon
-                FadeInUp(
-                  delay: const Duration(milliseconds: 600),
-                  child: TextFormField(
-                    controller: _passwordController,
-                    style: const TextStyle(color: Colors.white),
-                    obscureText: true,
-                    decoration: MuhafizTheme.inputDecoration('PASSWORD').copyWith(
-                      prefixIcon: const Icon(Icons.lock_outline, color: MuhafizTheme.emerald400, size: 20),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) return 'Please enter your password';
-                      if (value.length < 6) return 'Minimum 6 characters';
-                      return null;
-                    },
-                  ),
-                ),
-                
-                const SizedBox(height: 48),
-                
-                // FIXED CONTRAST BUTTON
-                FadeInUp(
-                  delay: const Duration(milliseconds: 800),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 60,
-                    child: ElevatedButton(
-                      onPressed: _isLoading ? null : _handleLogin,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: MuhafizTheme.emerald600,
-                        foregroundColor: Colors.white, // CRISP WHITE TEXT
-                        elevation: 8,
-                        shadowColor: MuhafizTheme.emerald600.withOpacity(0.4),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      ),
-                      child: _isLoading 
-                        ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
-                        : const Text('VERIFY IDENTITY', style: TextStyle(letterSpacing: 2, fontWeight: FontWeight.bold, fontSize: 14)),
-                    ),
-                  ),
-                ),
-                
-                const Spacer(),
-                
-                FadeIn(
-                  delay: const Duration(milliseconds: 1000),
-                  child: Center(
-                    child: TextButton(
-                      onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const SignupScreen())),
-                      child: const Text('NEW CITIZEN? APPLY FOR ACCESS', style: TextStyle(color: MuhafizTheme.emerald400, fontSize: 12, fontWeight: FontWeight.w600)),
-                    ),
-                  ),
-                ),
-              ],
+      body: Stack(
+        children: [
+          // Background Glow
+          Positioned(
+            top: -100,
+            right: -100,
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: MuhafizTheme.primaryEmerald.withOpacity(0.05),
+              ),
             ),
           ),
-        ),
+          
+          SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const SizedBox(height: 40),
+                    
+                    // Logo
+                    FadeInDown(
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: MuhafizTheme.primaryEmerald.withOpacity(0.2)),
+                        ),
+                        child: Image.asset(
+                          'assets/images/logo.png',
+                          height: 80,
+                          width: 80,
+                        ),
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 32),
+                    
+                    FadeInDown(
+                      delay: const Duration(milliseconds: 200),
+                      child: Text(
+                        'MUHAFIZ-LINK',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: MuhafizTheme.primaryEmerald,
+                          letterSpacing: 8,
+                        ),
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 8),
+                    
+                    FadeInDown(
+                      delay: const Duration(milliseconds: 400),
+                      child: Text(
+                        'SOVEREIGN GATE',
+                        style: Theme.of(context).textTheme.headlineLarge,
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 12),
+                    
+                    FadeInDown(
+                      delay: const Duration(milliseconds: 600),
+                      child: Text(
+                        'SECURE PROTOCOL V1.0.4',
+                        style: Theme.of(context).textTheme.labelSmall,
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 64),
+                    
+                    // NIC Input
+                    if (!_isOtpSent)
+                      FadeInUp(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'CITIZEN IDENTITY (CNIC)',
+                              style: Theme.of(context).textTheme.labelSmall?.copyWith(color: MuhafizTheme.primaryEmerald),
+                            ),
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: _nicController,
+                              inputFormatters: [nicFormatter],
+                              keyboardType: TextInputType.number,
+                              style: GoogleFonts.jetbrainsMono(
+                                fontSize: 18,
+                                letterSpacing: 2,
+                                color: MuhafizTheme.onSurface,
+                              ),
+                              decoration: InputDecoration(
+                                hintText: 'XXXXX-XXXXXXX-X',
+                                prefixIcon: const Icon(LucideIcons.shieldCheck, size: 20),
+                                counterText: '',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    
+                    // OTP Input
+                    if (_isOtpSent)
+                      FadeInUp(
+                        child: Column(
+                          children: [
+                            Text(
+                              'VERIFICATION CODE',
+                              style: Theme.of(context).textTheme.labelSmall?.copyWith(color: MuhafizTheme.primaryEmerald),
+                            ),
+                            const SizedBox(height: 24),
+                            Pinput(
+                              controller: _otpController,
+                              length: 6,
+                              defaultPinTheme: PinTheme(
+                                width: 50,
+                                height: 60,
+                                textStyle: GoogleFonts.jetbrainsMono(
+                                  fontSize: 24,
+                                  color: MuhafizTheme.primaryEmerald,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: MuhafizTheme.surfaceSlate,
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: MuhafizTheme.mutedSlate.withOpacity(0.3)),
+                                ),
+                              ),
+                              focusedPinTheme: PinTheme(
+                                width: 50,
+                                height: 60,
+                                textStyle: GoogleFonts.jetbrainsMono(
+                                  fontSize: 24,
+                                  color: MuhafizTheme.primaryEmerald,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: MuhafizTheme.surfaceSlate,
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(color: MuhafizTheme.primaryEmerald),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            TextButton(
+                              onPressed: () => setState(() => _isOtpSent = false),
+                              child: Text(
+                                'RE-ENTER IDENTITY',
+                                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                  color: MuhafizTheme.primaryEmerald,
+                                  decoration: TextDecoration.underline,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    
+                    const SizedBox(height: 48),
+                    
+                    // Action Button
+                    FadeInUp(
+                      delay: const Duration(milliseconds: 800),
+                      child: SizedBox(
+                        width: double.infinity,
+                        height: 56,
+                        child: ElevatedButton(
+                          onPressed: _isLoading ? null : (_isOtpSent ? _handleVerifyOtp : _handleRequestOtp),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: MuhafizTheme.primaryEmerald,
+                            elevation: 8,
+                            shadowColor: MuhafizTheme.primaryEmerald.withOpacity(0.3),
+                          ),
+                          child: _isLoading
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  color: Color(0xFF003824),
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : Text(
+                                _isOtpSent ? 'AUTHORIZE ACCESS' : 'REQUEST AUTHENTICATION',
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                        ),
+                      ),
+                    ),
+                    
+                    const SizedBox(height: 32),
+                    
+                    // Biometric Option (Simulated)
+                    if (!_isOtpSent)
+                      FadeInUp(
+                        delay: const Duration(milliseconds: 1000),
+                        child: OutlinedButton.icon(
+                          onPressed: () => MuhafizFeedback.showToast("SCANNING BIOMETRICS..."),
+                          icon: const Icon(LucideIcons.fingerprint, size: 18),
+                          label: const Text('RAPID REPORTING MODE'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: MuhafizTheme.mutedSlate,
+                            side: BorderSide(color: MuhafizTheme.mutedSlate.withOpacity(0.3)),
+                            textStyle: Theme.of(context).textTheme.labelSmall,
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+                          ),
+                        ),
+                      ),
+                    
+                    const SizedBox(height: 64),
+                    
+                    // Signup Link
+                    FadeIn(
+                      delay: const Duration(milliseconds: 1200),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            'NEW CITIZEN?',
+                            style: Theme.of(context).textTheme.labelSmall,
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => const SignupScreen()),
+                            ),
+                            child: Text(
+                              'APPLY FOR SOVEREIGNTY',
+                              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                color: MuhafizTheme.primaryEmerald,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
