@@ -11,6 +11,15 @@ const AgentTraceTerminal = ({ traces = [] }) => {
         return acc;
     }, {});
 
+    const formatTime = (ts) => {
+        if (!ts) return "Just Now";
+        const diff = Date.now() - ts;
+        if (diff < 60000) return "Just Now";
+        const mins = Math.floor(diff / 60000);
+        if (mins < 60) return `${mins}m ago`;
+        return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    };
+
     const latestIncident = Object.values(incidents).reverse()[0];
 
     return (
@@ -35,10 +44,19 @@ const AgentTraceTerminal = ({ traces = [] }) => {
                 <TacticalMedia activeIncident={latestIncident} />
 
                 <div className="pt-4 border-t border-white/5">
-                    <h5 className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-600 mb-4 px-1">Incident History</h5>
-                    {Object.values(incidents).reverse().map((incident) => (
-                        <IncidentTrack key={incident.id} incident={incident} />
-                    ))}
+                    <div className="flex justify-between items-center mb-4 px-1">
+                        <h5 className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-600">Incident History</h5>
+                        <span className="text-[7px] font-mono font-black text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                            LATEST 3 ACTIVE
+                        </span>
+                    </div>
+                    {Object.values(incidents)
+                        .reverse()
+                        .slice(0, 3)
+                        .map((incident) => (
+                            <IncidentTrack key={incident.id} incident={incident} formatTime={formatTime} />
+                        ))
+                    }
                     
                     {traces.length === 0 && (
                         <div className="flex flex-col items-center justify-center py-20 opacity-20 space-y-4">
@@ -68,7 +86,7 @@ const AgentTraceTerminal = ({ traces = [] }) => {
     );
 };
 
-const IncidentTrack = ({ incident }) => {
+const IncidentTrack = ({ incident, formatTime }) => {
     const [expandedStep, setExpandedStep] = React.useState(null);
     const latestLog = incident.logs[incident.logs.length - 1];
     const isComplete = latestLog?.agent === 'The Auditor';
@@ -79,9 +97,9 @@ const IncidentTrack = ({ incident }) => {
         }`}>
             {/* Incident Header */}
             <div className="flex justify-between items-start mb-4">
-                <div className="space-y-1.5">
-                    <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono font-bold text-emerald-500 bg-emerald-500/10 px-2 py-0.5 rounded leading-none">
+                <div className="space-y-1.5 min-w-0 flex-1 pr-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded leading-none">
                             {incident.id}
                         </span>
                         {incident.logs[0]?.agent === 'The Dispatcher' && (
@@ -96,16 +114,25 @@ const IncidentTrack = ({ incident }) => {
                         )}
                     </div>
                     <div className="flex items-center gap-1.5 text-zinc-300">
-                        <MapPin size={12} className="text-zinc-500" />
-                        <span className="text-xs font-bold truncate max-w-[120px]">
+                        <MapPin size={12} className="text-zinc-500 shrink-0" />
+                        <span className="text-xs font-bold truncate max-w-[140px]">
                             {incident.logs[0]?.message?.split('at ')[1]?.replace('.', '') || 'Active Hotspot'}
                         </span>
                     </div>
                 </div>
-                <div className="flex flex-col items-end">
-                    <Clock size={10} className="text-zinc-600 mb-1" />
-                    <span className="text-[8px] font-mono text-zinc-600 uppercase">
-                        {isComplete ? 'Archived' : 'Live'}
+                <div className="flex flex-col items-end shrink-0">
+                    <div className="flex items-center gap-1 text-zinc-500 mb-1">
+                        <Clock size={10} />
+                        <span className="text-[8px] font-mono font-bold">
+                            {formatTime(latestLog?.timestamp)}
+                        </span>
+                    </div>
+                    <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                        isComplete 
+                            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+                            : 'bg-red-500/10 border-red-500/20 text-red-400 animate-pulse'
+                    }`}>
+                        {isComplete ? 'RESOLVED' : 'ACTIVE'}
                     </span>
                 </div>
             </div>
