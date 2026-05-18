@@ -36,6 +36,11 @@ dependencies:
   cupertino_icons: ^1.0.8
   mapbox_maps_flutter: ^2.23.1
   http: ^1.6.0
+  web_socket_channel: ^3.0.1
+  shared_preferences: ^2.3.3
+  image_picker: ^1.1.2
+  google_fonts: ^6.2.1
+  fluttertoast: ^8.2.12
 
 dev_dependencies:
   flutter_test:

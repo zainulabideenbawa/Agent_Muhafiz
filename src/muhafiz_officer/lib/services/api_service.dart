@@ -1,8 +1,12 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  static const String baseUrl = 'http://localhost:3001/api';
+  static const String _macLanIp = '192.168.18.41';
+  static final String _host = Platform.isAndroid ? '10.0.2.2' : _macLanIp;
+  static final String baseUrl = 'http://$_host:3001/api';
+  static String get wsUrl => 'ws://$_host:3001';
 
   // Fetch active incidents from the real database
   static Future<List<Map<String, dynamic>>> getIncidents() async {
@@ -30,7 +34,7 @@ class ApiService {
   static Future<bool> retractAlert(String incidentId, String reason) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/retract-alert'),
+        Uri.parse('$baseUrl/incidents/retract-alert'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'incidentId': incidentId, 'reason': reason}),
       );
@@ -44,14 +48,14 @@ class ApiService {
   static Future<bool> acceptQuest(String incidentId) async {
     try {
       final response = await http.post(
-        Uri.parse('$baseUrl/accept-quest'),
+        Uri.parse('$baseUrl/incidents/accept-quest'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'incidentId': incidentId}),
       );
       return response.statusCode == 200;
     } catch (e) {
       print('Error accepting quest: $e');
-      return true; // Mock true for development if server is down
+      return false;
     }
   }
 

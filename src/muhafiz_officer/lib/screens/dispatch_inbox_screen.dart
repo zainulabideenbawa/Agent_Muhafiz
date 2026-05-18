@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' hide Size;
 import '../theme.dart';
 import '../services/api_service.dart';
+import '../services/socket_service.dart';
 import 'ground_truth_screen.dart';
+import 'verification_quest_screen.dart';
 
 class DispatchInboxScreen extends StatefulWidget {
   const DispatchInboxScreen({super.key});
@@ -19,6 +21,25 @@ class _DispatchInboxScreenState extends State<DispatchInboxScreen> {
   void initState() {
     super.initState();
     _fetchData();
+    OfficerSocketService.connect(ApiService.wsUrl);
+    OfficerSocketService.addListener(_handleSocketMessage);
+  }
+
+  void _handleSocketMessage(Map<String, dynamic> msg) {
+    if (msg['type'] == 'VERIFICATION_QUEST' && mounted) {
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => VerificationQuestScreen(quest: msg),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    OfficerSocketService.removeListener(_handleSocketMessage);
+    super.dispose();
   }
 
   Future<void> _fetchData() async {
@@ -33,18 +54,46 @@ class _DispatchInboxScreenState extends State<DispatchInboxScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('MUHAFIZ-X | DISPATCH'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.sync, color: MuhafizTheme.sovereignGreen),
-            onPressed: _fetchData,
-          ),
-          const SizedBox(width: 8),
-        ],
-      ),
       body: Column(
         children: [
+          // Custom header row
+          SafeArea(
+            bottom: false,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: MuhafizTheme.surfaceBorder)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.inbox, color: MuhafizTheme.sovereignGreen, size: 18),
+                      SizedBox(width: 8),
+                      Text(
+                        'DISPATCH FEED',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontFamily: 'monospace',
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                          letterSpacing: 2,
+                        ),
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.sync, color: MuhafizTheme.sovereignGreen, size: 20),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    tooltip: 'Refresh',
+                    onPressed: _fetchData,
+                  ),
+                ],
+              ),
+            ),
+          ),
           // Live Routing Map
           Container(
             height: 250,
@@ -65,7 +114,7 @@ class _DispatchInboxScreenState extends State<DispatchInboxScreen> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.7),
+                      color: Colors.black.withValues(alpha: 0.7),
                       border: Border.all(color: MuhafizTheme.sovereignGreen),
                     ),
                     child: const Row(
@@ -119,12 +168,12 @@ class _DispatchInboxScreenState extends State<DispatchInboxScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
-        color: MuhafizTheme.tacticalGray.withOpacity(0.9),
+        color: MuhafizTheme.tacticalGray.withValues(alpha: 0.9),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: MuhafizTheme.surfaceBorder),
         boxShadow: [
           BoxShadow(
-            color: MuhafizTheme.sovereignGreen.withOpacity(0.05),
+            color: MuhafizTheme.sovereignGreen.withValues(alpha: 0.05),
             blurRadius: 20,
             spreadRadius: 5,
           )
@@ -161,9 +210,9 @@ class _DispatchInboxScreenState extends State<DispatchInboxScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
-                    color: MuhafizTheme.sovereignGreen.withOpacity(0.1),
+                    color: MuhafizTheme.sovereignGreen.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: MuhafizTheme.sovereignGreen.withOpacity(0.3)),
+                    border: Border.all(color: MuhafizTheme.sovereignGreen.withValues(alpha: 0.3)),
                   ),
                   child: Text(
                     'CONF: ${(brief['confidence'] * 100).toInt()}%',
@@ -206,7 +255,7 @@ class _DispatchInboxScreenState extends State<DispatchInboxScreen> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.3),
+                    color: Colors.black.withValues(alpha: 0.3),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: MuhafizTheme.surfaceBorder),
                   ),
@@ -281,7 +330,7 @@ class TacticalGridPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = MuhafizTheme.sovereignGreen.withOpacity(0.05)
+      ..color = MuhafizTheme.sovereignGreen.withValues(alpha: 0.05)
       ..strokeWidth = 0.5;
 
     const spacing = 40.0;
@@ -295,7 +344,7 @@ class TacticalGridPainter extends CustomPainter {
     
     // Glowing circles
     final circlePaint = Paint()
-      ..color = MuhafizTheme.sovereignGreen.withOpacity(0.02)
+      ..color = MuhafizTheme.sovereignGreen.withValues(alpha: 0.02)
       ..style = PaintingStyle.fill;
       
     canvas.drawCircle(Offset(size.width * 0.5, size.height * 0.5), 150, circlePaint);

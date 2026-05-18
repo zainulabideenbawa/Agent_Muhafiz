@@ -11,7 +11,7 @@ class AgentTraceHud extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: MuhafizTheme.nightOpsBlack.withOpacity(0.85),
+        color: MuhafizTheme.nightOpsBlack.withValues(alpha: 0.85),
         border: const Border(top: BorderSide(color: MuhafizTheme.surfaceBorder)),
       ),
       child: Column(
