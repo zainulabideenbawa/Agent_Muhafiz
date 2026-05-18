@@ -68,6 +68,10 @@
 	</array>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>This app requires access to the local network to connect to the backend development server.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Camera is required to capture field evidence photos.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Photo library access is required to attach evidence from your gallery.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>

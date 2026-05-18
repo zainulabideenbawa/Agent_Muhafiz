@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 class AuthService {
   // 10.0.2.2 is the special alias for localhost in Android Emulators
   // For physical iPhone, use Mac's LAN IP (same as ApiService)
-  static const String _macLanIp = '192.168.18.41';
+  static const String _macLanIp = '192.168.18.56';
   static final String baseUrl = Platform.isAndroid
       ? 'http://10.0.2.2:3001/api'
       : 'http://$_macLanIp:3001/api';
@@ -54,10 +54,7 @@ class AuthService {
     final response = await http.post(
       Uri.parse('$baseUrl/login'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({
-        'nic': nic,
-        'password': password,
-      }),
+      body: jsonEncode({'nic': nic, 'password': password}),
     );
     return jsonDecode(response.body);
   }

@@ -4,11 +4,14 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class OfficerAuthService {
-  static const String _macLanIp = '192.168.18.41';
+  static const String _macLanIp = '192.168.18.56';
   static final String _host = Platform.isAndroid ? '10.0.2.2' : _macLanIp;
   static final String _baseUrl = 'http://$_host:3001/api';
 
-  static Future<Map<String, dynamic>> login(String email, String password) async {
+  static Future<Map<String, dynamic>> login(
+    String email,
+    String password,
+  ) async {
     try {
       final res = await http
           .post(
@@ -21,8 +24,14 @@ class OfficerAuthService {
       if (res.statusCode == 200 && data['success'] == true) {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('officer_email', email);
-        await prefs.setString('officer_name', data['user']?['name'] ?? 'Officer');
-        await prefs.setString('officer_role', data['user']?['role'] ?? 'OFFICER');
+        await prefs.setString(
+          'officer_name',
+          data['user']?['name'] ?? 'Officer',
+        );
+        await prefs.setString(
+          'officer_role',
+          data['user']?['role'] ?? 'OFFICER',
+        );
       }
       return data;
     } catch (e) {

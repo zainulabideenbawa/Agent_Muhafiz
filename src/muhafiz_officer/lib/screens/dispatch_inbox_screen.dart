@@ -16,6 +16,7 @@ class DispatchInboxScreen extends StatefulWidget {
 class _DispatchInboxScreenState extends State<DispatchInboxScreen> {
   List<Map<String, dynamic>> incidents = [];
   bool isLoading = true;
+  String? errorMessage;
 
   @override
   void initState() {
@@ -43,12 +44,13 @@ class _DispatchInboxScreenState extends State<DispatchInboxScreen> {
   }
 
   Future<void> _fetchData() async {
-    setState(() => isLoading = true);
-    final data = await ApiService.getIncidents();
-    setState(() {
-      incidents = data;
-      isLoading = false;
-    });
+    setState(() { isLoading = true; errorMessage = null; });
+    try {
+      final data = await ApiService.getIncidents();
+      if (mounted) setState(() { incidents = data; isLoading = false; });
+    } catch (e) {
+      if (mounted) setState(() { isLoading = false; errorMessage = 'SERVER UNREACHABLE\n$e'; });
+    }
   }
 
   @override
@@ -142,6 +144,22 @@ class _DispatchInboxScreenState extends State<DispatchInboxScreen> {
                 
                 if (isLoading)
                   const Center(child: CircularProgressIndicator(color: MuhafizTheme.sovereignGreen))
+                else if (errorMessage != null)
+                  Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.wifi_off, color: MuhafizTheme.crisisRed, size: 40),
+                          const SizedBox(height: 12),
+                          Text(errorMessage!, textAlign: TextAlign.center, style: const TextStyle(color: MuhafizTheme.crisisRed, fontFamily: 'monospace', fontSize: 11)),
+                          const SizedBox(height: 16),
+                          ElevatedButton(onPressed: _fetchData, style: ElevatedButton.styleFrom(backgroundColor: MuhafizTheme.sovereignGreen, foregroundColor: Colors.black), child: const Text('RETRY')),
+                        ],
+                      ),
+                    ),
+                  )
                 else if (incidents.isEmpty)
                   const Center(child: Text('NO ACTIVE MISSIONS', style: TextStyle(color: MuhafizTheme.textSecondary)))
                 else
@@ -162,8 +180,10 @@ class _DispatchInboxScreenState extends State<DispatchInboxScreen> {
   }
 
   Widget _buildIncidentCard(Map<String, dynamic> incident) {
-    final type = incident['type']?.toString().toLowerCase() ?? 'flood';
-    final brief = ApiService.getTechnicalBrief(type);
+    final double confidence = ((incident['confidence'] ?? incident['ai_confidence'] ?? 0.0) as num).toDouble();
+    final String instructions = incident['instructions'] ?? (incident['data']?['raw_input'] ?? 'Awaiting instructions from command.');
+    final String equipment = incident['equipment'] ?? 'Awaiting equipment list.';
+    final String prediction = incident['analyst_prediction'] ?? incident['prediction'] ?? 'Awaiting AI analysis.';
     
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
@@ -215,7 +235,7 @@ class _DispatchInboxScreenState extends State<DispatchInboxScreen> {
                     border: Border.all(color: MuhafizTheme.sovereignGreen.withValues(alpha: 0.3)),
                   ),
                   child: Text(
-                    'CONF: ${(brief['confidence'] * 100).toInt()}%',
+                    'CONF: ${(confidence * 100).toInt()}%',
                     style: const TextStyle(color: MuhafizTheme.sovereignGreen, fontSize: 10, fontWeight: FontWeight.bold),
                   ),
                 ),
@@ -248,7 +268,7 @@ class _DispatchInboxScreenState extends State<DispatchInboxScreen> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  brief['instructions'],
+                  instructions,
                   style: const TextStyle(color: Colors.white, fontSize: 13, height: 1.4),
                 ),
                 const SizedBox(height: 12),
@@ -261,9 +281,9 @@ class _DispatchInboxScreenState extends State<DispatchInboxScreen> {
                   ),
                   child: Column(
                     children: [
-                      _buildBriefItem(Icons.settings, 'EQUIPMENT', brief['equipment']),
+                      _buildBriefItem(Icons.settings, 'EQUIPMENT', equipment),
                       const SizedBox(height: 8),
-                      _buildBriefItem(Icons.analytics, 'PREDICTION', brief['analyst_prediction']),
+                      _buildBriefItem(Icons.analytics, 'PREDICTION', prediction),
                     ],
                   ),
                 ),

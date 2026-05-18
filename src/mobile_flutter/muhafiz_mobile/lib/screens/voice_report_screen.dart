@@ -72,7 +72,7 @@ class _VoiceReportScreenState extends State<VoiceReportScreen>
         onStatus: (status) {
           debugPrint('[STT] Status: $status');
           if (status == 'notListening' && _isRecording) {
-            _stopAndSubmit();
+            _stopRecording();
           }
         },
       );
@@ -140,7 +140,7 @@ class _VoiceReportScreenState extends State<VoiceReportScreen>
     );
   }
 
-  Future<void> _stopAndSubmit() async {
+  Future<void> _stopRecording() async {
     if (!_isRecording) return;
 
     _durationTimer?.cancel();
@@ -148,6 +148,12 @@ class _VoiceReportScreenState extends State<VoiceReportScreen>
 
     setState(() {
       _isRecording = false;
+      _status = 'SIGNAL RECORDED - READY TO TRANSMIT';
+    });
+  }
+
+  Future<void> _submitVoiceReport() async {
+    setState(() {
       _status = 'ANALYZING SIGNAL';
       _isSubmitting = true;
     });
@@ -159,7 +165,7 @@ class _VoiceReportScreenState extends State<VoiceReportScreen>
         _isSubmitting = false;
         _status = 'AWAITING SIGNAL';
       });
-      MuhafizFeedback.showToast('Hold longer and speak clearly into the mic');
+      MuhafizFeedback.showToast('Audio too short. Please record again.');
       return;
     }
 
@@ -534,7 +540,7 @@ class _VoiceReportScreenState extends State<VoiceReportScreen>
         if (!_isSubmitting)
           GestureDetector(
             onLongPressStart: (_) => _startRecording(),
-            onLongPressEnd: (_) => _stopAndSubmit(),
+            onLongPressEnd: (_) => _stopRecording(),
             child: AnimatedScale(
               scale: _isRecording ? 1.12 : 1.0,
               duration: const Duration(milliseconds: 200),
@@ -589,7 +595,7 @@ class _VoiceReportScreenState extends State<VoiceReportScreen>
           const SizedBox(height: 24),
           Text(
             _isRecording
-                ? 'RELEASE TO TRANSMIT'
+                ? 'RELEASE TO STOP RECORDING'
                 : _speechAvailable
                     ? 'HOLD TO RECORD EMERGENCY VOICE'
                     : 'MIC UNAVAILABLE — CHECK PERMISSIONS',
@@ -628,6 +634,23 @@ class _VoiceReportScreenState extends State<VoiceReportScreen>
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.amber,
                 side: const BorderSide(color: Colors.amber),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+              ),
+            ),
+          ],
+          if (!_isRecording && _transcribedText.isNotEmpty && !_speechInitializing) ...[
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: _isSubmitting ? null : _submitVoiceReport,
+              icon: const Icon(LucideIcons.send, size: 14),
+              label: const Text(
+                'TRANSMIT EMERGENCY SIGNAL',
+                style: TextStyle(fontFamily: 'JetBrains Mono', fontWeight: FontWeight.bold, fontSize: 11),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: MuhafizTheme.primaryEmerald,
+                foregroundColor: const Color(0xFF003824),
+                padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
               ),
             ),

@@ -23,18 +23,7 @@ class _GroundTruthScreenState extends State<GroundTruthScreen> {
   @override
   void initState() {
     super.initState();
-    traceLogs = [
-      {
-        'agent': 'The Sentinel',
-        'message': 'Signal clustered at ${widget.incident['location'] ?? 'UNKNOWN'}',
-        'outcome': 'Success',
-      },
-      {
-        'agent': 'The TruthEngine',
-        'message': 'Verification score: 0.88 via telemetry',
-        'outcome': 'Success',
-      },
-    ];
+    traceLogs = [];
   }
 
   Future<void> _openCamera() async {
@@ -91,6 +80,50 @@ class _GroundTruthScreenState extends State<GroundTruthScreen> {
           ),
         );
       }
+    }
+  }
+
+  Future<void> _handleConfirm() async {
+    setState(() => isSubmitting = true);
+    try {
+      final success = await ApiService.confirmCrisis(
+        widget.incident['incident_id'] ?? '',
+      );
+      if (!mounted) return;
+      if (success) {
+        setState(() {
+          traceLogs.add({
+            'agent': 'The Auditor',
+            'message': 'CRISIS CONFIRMED: ${widget.incident['incident_id']}',
+            'outcome': 'Success',
+          });
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('CONFIRMED: ${widget.incident['incident_id']} — alert remains active.'),
+            backgroundColor: MuhafizTheme.crisisRed,
+          ),
+        );
+        await Future.delayed(const Duration(seconds: 1));
+        if (mounted) Navigator.pop(context);
+      } else {
+        setState(() => isSubmitting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('CONFIRM FAILED — CHECK SERVER'),
+            backgroundColor: MuhafizTheme.crisisRed,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => isSubmitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('ERROR: $e'),
+          backgroundColor: MuhafizTheme.crisisRed,
+        ),
+      );
     }
   }
 
@@ -367,7 +400,7 @@ class _GroundTruthScreenState extends State<GroundTruthScreen> {
                     sublabel: 'Situation active — alert remains live',
                     color: MuhafizTheme.crisisRed,
                     icon: Icons.check_circle_outline,
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: _handleConfirm,
                   ),
                   const SizedBox(height: 12),
                   _buildVerdictButton(
