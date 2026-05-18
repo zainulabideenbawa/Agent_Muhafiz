@@ -197,19 +197,14 @@ class _VoiceReportScreenState extends State<VoiceReportScreen>
 
   Future<void> _transmitSignal(String signalText, String type, Map<String, dynamic> extraMeta) async {
     try {
-      final response = await ApiService.post('/report', {
-        'signal': signalText,
-        'metadata': {
-          'type': type,
-          'priority': 'high',
-          ...extraMeta,
-        }
+      final response = await ApiService.post('/incidents/trigger-crisis', {
+        'input': signalText,
       });
 
       if (response['success'] == true) {
         setState(() {
           _status = 'REPORT LOGGED';
-          _incidentId = response['incidentId'] ?? response['data']?['incident_id'] ?? 'MHFZ-????';
+          _incidentId = response['data']?['incidentId'] ?? 'MHFZ-????';
           _isSubmitting = false;
           _isLogged = true;
         });

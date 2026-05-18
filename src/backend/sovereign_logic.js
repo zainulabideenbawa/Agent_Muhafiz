@@ -27,9 +27,30 @@ export const runSovereignLogic = async (incidentId, input) => {
             const nodeName = Object.keys(chunk)[0];
             const stateUpdate = chunk[nodeName];
 
+            if (!stateUpdate || typeof stateUpdate !== 'object') continue;
+
             if (stateUpdate.assigned_department) assignedDept = stateUpdate.assigned_department;
 
-            finalState = { ...finalState, ...stateUpdate };
+            // Deep-merge classification so location.landmark is never clobbered by a
+            // downstream agent returning a flat classification object.
+            const mergedClassification = (finalState.classification || stateUpdate.classification)
+                ? {
+                    ...(finalState.classification || {}),
+                    ...(stateUpdate.classification || {}),
+                    location: (
+                        stateUpdate.classification?.location &&
+                        typeof stateUpdate.classification.location === 'object'
+                    )
+                        ? stateUpdate.classification.location
+                        : (finalState.classification?.location || { landmark: 'Karachi' })
+                }
+                : finalState.classification;
+
+            finalState = {
+                ...finalState,
+                ...stateUpdate,
+                classification: mergedClassification,
+            };
 
             if (stateUpdate?.traceLogs?.length > 0) {
                 const latestLog = stateUpdate.traceLogs[stateUpdate.traceLogs.length - 1];

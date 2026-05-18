@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../theme/theme.dart';
+import '../services/api_service.dart';
+import '../services/socket_service.dart';
 import 'voice_report_screen.dart';
 import 'profile_screen.dart';
 import 'council_hub_screen.dart';
@@ -73,9 +75,79 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-class _SentinelPulseTab extends StatelessWidget {
+class _SentinelPulseTab extends StatefulWidget {
   final Map<String, dynamic>? user;
-  const _SentinelPulseTab({this.user});
+  const _SentinelPulseTab({super.key, this.user});
+
+  @override
+  State<_SentinelPulseTab> createState() => _SentinelPulseTabState();
+}
+
+class _SentinelPulseTabState extends State<_SentinelPulseTab> {
+  final List<Map<String, String>> _logs = [
+    {'agent': 'SYS', 'msg': 'PROTOCOL MUHAFIZ-X ACTIVE.'},
+    {'agent': 'SENTNL', 'msg': 'SENTINEL ENGINE RUNNING. STANDBY FOR TELEMETRY...'},
+  ];
+
+  Map<String, dynamic>? _activeAlert;
+  bool _showAlert = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Connect to standard WebSockets using ApiService dynamic wsUrl
+    SocketService.connect(ApiService.wsUrl);
+    SocketService.addListener(_handleSocketMessage);
+  }
+
+  @override
+  void dispose() {
+    SocketService.removeListener(_handleSocketMessage);
+    super.dispose();
+  }
+
+  void _handleSocketMessage(Map<String, dynamic> message) {
+    if (!mounted) return;
+
+    final type = message['type'];
+    if (type == 'TRACE_LOG') {
+      final log = message['log'];
+      if (log != null) {
+        final String agent = log['agent']?.toString().toUpperCase() ?? 'AGENT';
+        String shortAgent = agent;
+        if (agent.contains('ANALYST')) shortAgent = 'ANALST';
+        if (agent.contains('ORACLE')) shortAgent = 'ORACLE';
+        if (agent.contains('COMMUNICATOR')) shortAgent = 'COMM';
+        if (agent.contains('DISPATCHER')) shortAgent = 'DISP';
+
+        setState(() {
+          _logs.insert(0, {
+            'agent': shortAgent,
+            'msg': log['message']?.toString().toUpperCase() ?? '',
+          });
+          if (_logs.length > 25) {
+            _logs.removeLast();
+          }
+        });
+      }
+    } else if (type == 'COMMUNICATION_ALERT') {
+      final data = message['data'];
+      final assignedDept = message['assigned_department'] ?? 'GOVERNMENT DEFENSE';
+      if (data != null) {
+        setState(() {
+          _activeAlert = {
+            'dept': assignedDept,
+            'scope': data['scope'] ?? 'LOCAL',
+            'push_en': data['push_notification']?['en'] ?? 'Emergency crisis alert broadcasted near your sector.',
+            'push_ur': data['push_notification']?['ur'] ?? 'آپ کے علاقے میں ہنگامی صورتحال کا الرٹ جاری کیا گیا ہے۔',
+            'whatsapp_en': data['whatsapp_draft']?['en'] ?? '',
+            'whatsapp_ur': data['whatsapp_draft']?['ur'] ?? '',
+          };
+          _showAlert = true;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -88,6 +160,10 @@ class _SentinelPulseTab extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (_showAlert && _activeAlert != null) ...[
+                  _buildGovernmentAlertCard(),
+                  const SizedBox(height: 24),
+                ],
                 _buildSectionHeader(context, 'AREA VITALS', 'SECTOR: GULSHAN-E-IQBAL'),
                 const SizedBox(height: 16),
                 _buildVitalsScroll(),
@@ -101,6 +177,256 @@ class _SentinelPulseTab extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildGovernmentAlertCard() {
+    final alert = _activeAlert!;
+    return FadeInDown(
+      duration: const Duration(milliseconds: 500),
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Colors.red.withOpacity(0.15),
+              Colors.orange.withOpacity(0.05),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: Colors.red.withOpacity(0.5), width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.red.withOpacity(0.15),
+              blurRadius: 16,
+              spreadRadius: 2,
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Pulse(
+                  infinite: true,
+                  duration: const Duration(seconds: 2),
+                  child: const Icon(LucideIcons.alertTriangle, color: Colors.red, size: 20),
+                ),
+                const SizedBox(width: 10),
+                const Text(
+                  'CRISIS ALERT',
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 2,
+                    fontSize: 12,
+                    fontFamily: 'JetBrains Mono',
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                  child: Text(
+                    alert['scope'].toString().toUpperCase(),
+                    style: const TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 10,
+                      fontFamily: 'JetBrains Mono',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              alert['push_en'] ?? '',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+                height: 1.3,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(2),
+                border: Border.all(color: Colors.red.withOpacity(0.15)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(LucideIcons.volume2, color: Colors.redAccent, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      alert['push_ur'] ?? '',
+                      textDirection: TextDirection.rtl,
+                      style: const TextStyle(
+                        color: Colors.redAccent,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        height: 1.6,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    'DEPT: ${alert['dept'].toString().toUpperCase()}',
+                    style: const TextStyle(
+                      color: MuhafizTheme.darkTextMuted,
+                      fontSize: 10,
+                      fontFamily: 'JetBrains Mono',
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Row(
+                  children: [
+                    TextButton(
+                      onPressed: () {
+                        setState(() => _showAlert = false);
+                      },
+                      child: const Text(
+                        'DISMISS',
+                        style: TextStyle(
+                          color: MuhafizTheme.darkTextMuted,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: 'JetBrains Mono',
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        _showWhatsAppDraftDialog(context, alert);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      icon: const Icon(LucideIcons.messageSquare, size: 12),
+                      label: const Text(
+                        'VIEW WIRE',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: 'JetBrains Mono',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showWhatsAppDraftDialog(BuildContext context, Map<String, dynamic> alert) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF0C162D),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(4),
+          side: const BorderSide(color: Colors.redAccent, width: 1.5),
+        ),
+        title: const Row(
+          children: [
+            Icon(LucideIcons.messageSquare, color: Colors.greenAccent, size: 20),
+            SizedBox(width: 10),
+            Text(
+              'OFFICIAL GOVT WIRE',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'JetBrains Mono',
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'ENGLISH BROADCAST:',
+                style: TextStyle(
+                  color: Colors.greenAccent,
+                  fontSize: 11,
+                  fontFamily: 'JetBrains Mono',
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                alert['whatsapp_en'] ?? '',
+                style: const TextStyle(color: Colors.white, fontSize: 13, height: 1.4),
+              ),
+              const Divider(color: Colors.white10, height: 24),
+              const Text(
+                'URDU BROADCAST (اردو نشریات):',
+                style: TextStyle(
+                  color: Colors.greenAccent,
+                  fontSize: 11,
+                  fontFamily: 'JetBrains Mono',
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                alert['whatsapp_ur'] ?? '',
+                textDirection: TextDirection.rtl,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  height: 1.6,
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              'CLOSE',
+              style: TextStyle(
+                color: Colors.greenAccent,
+                fontFamily: 'JetBrains Mono',
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -122,7 +448,7 @@ class _SentinelPulseTab extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                user?['name']?.toUpperCase() ?? 'CITIZEN',
+                widget.user?['name']?.toUpperCase() ?? 'CITIZEN',
                 style: Theme.of(context).textTheme.headlineMedium,
               ),
             ],
@@ -155,11 +481,32 @@ class _SentinelPulseTab extends StatelessWidget {
   }
 
   Widget _buildVitalsScroll() {
+    final hasAlert = _showAlert && _activeAlert != null;
     final vitals = [
-      {'label': 'AIR QUALITY', 'value': '74 AQI', 'icon': LucideIcons.wind, 'color': Colors.green},
-      {'label': 'POWER GRID', 'value': 'STABLE', 'icon': LucideIcons.zap, 'color': Colors.amber},
-      {'label': 'WATER LEVEL', 'value': 'OPTIMAL', 'icon': LucideIcons.droplets, 'color': Colors.blue},
-      {'label': 'SECURITY', 'value': 'LOCKED', 'icon': LucideIcons.shieldCheck, 'color': MuhafizTheme.primaryEmerald},
+      {
+        'label': 'AIR QUALITY',
+        'value': hasAlert ? '142 AQI (POOR)' : '74 AQI',
+        'icon': LucideIcons.wind,
+        'color': hasAlert ? Colors.orange : Colors.green
+      },
+      {
+        'label': 'POWER GRID',
+        'value': hasAlert ? 'GRID PRESSURE' : 'STABLE',
+        'icon': LucideIcons.zap,
+        'color': hasAlert ? Colors.redAccent : Colors.amber
+      },
+      {
+        'label': 'WATER LEVEL',
+        'value': 'OPTIMAL',
+        'icon': LucideIcons.droplets,
+        'color': Colors.blue
+      },
+      {
+        'label': 'SECURITY',
+        'value': hasAlert ? 'HIGH ALERT' : 'SECURE',
+        'icon': hasAlert ? LucideIcons.shieldAlert : LucideIcons.shieldCheck,
+        'color': hasAlert ? Colors.red : MuhafizTheme.primaryEmerald
+      },
     ];
 
     return SizedBox(
@@ -178,7 +525,11 @@ class _SentinelPulseTab extends StatelessWidget {
               decoration: BoxDecoration(
                 color: MuhafizTheme.surfaceSlate,
                 borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: MuhafizTheme.primaryEmerald.withOpacity(0.1)),
+                border: Border.all(
+                  color: hasAlert && (item['label'] == 'SECURITY' || item['label'] == 'POWER GRID')
+                      ? Colors.red.withOpacity(0.3)
+                      : MuhafizTheme.primaryEmerald.withOpacity(0.1),
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -198,13 +549,6 @@ class _SentinelPulseTab extends StatelessWidget {
   }
 
   Widget _buildTerminalFeed() {
-    final logs = [
-      {'agent': 'ANALST', 'msg': 'DETECTED ABNORMAL HEAT SIGNATURE IN SECTOR 4.'},
-      {'agent': 'ORACLE', 'msg': 'CROSS-REFERENCING WITH SOCIAL MEDIA TRENDS...'},
-      {'agent': 'SENTNL', 'msg': 'DISPATCHING VERIFICATION QUEST TO NEARBY OFFICER.'},
-      {'agent': 'SYS', 'msg': 'PROTOCOL MUHAFIZ-X ACTIVE.'},
-    ];
-
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -213,7 +557,7 @@ class _SentinelPulseTab extends StatelessWidget {
         border: Border.all(color: MuhafizTheme.primaryEmerald.withOpacity(0.2)),
       ),
       child: Column(
-        children: logs.map((log) => Padding(
+        children: _logs.map((log) => Padding(
           padding: const EdgeInsets.only(bottom: 12),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,

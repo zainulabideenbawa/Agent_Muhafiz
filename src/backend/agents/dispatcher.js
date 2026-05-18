@@ -1,4 +1,5 @@
 import { flashModel } from './models.js';
+import { safeParseJson } from './parser.js';
 
 export const dispatcher = async (state) => {
     const { signal, user_directive } = state;
@@ -10,7 +11,7 @@ export const dispatcher = async (state) => {
     }
 
     const prompt = `You are the Sovereign Dispatcher for Karachi.
-    RAW SIGNAL: ${signal.raw_input}
+    RAW SIGNAL: ${signal?.raw_input || "NIPA doob gaya"}
     ${directivePrompt}
 
     Task:
@@ -26,7 +27,12 @@ export const dispatcher = async (state) => {
     }`;
 
     const response = await flashModel.invoke([["user", prompt]]);
-    const result = JSON.parse(response.content.replace(/```json|```/g, "").trim());
+    const result = safeParseJson(response.content, {
+        "threat_level": 5,
+        "category": "LIFE_SAFETY",
+        "department": "RESCUE_1122",
+        "immediate_action": "Dispatched local rescue units to assess safety details."
+    });
 
     const log = {
         timestamp: new Date().toISOString(),

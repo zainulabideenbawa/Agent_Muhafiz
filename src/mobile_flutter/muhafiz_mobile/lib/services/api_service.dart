@@ -8,19 +8,25 @@ class ApiService {
   // For iOS Simulator: '127.0.0.1'
   // For Physical iPhone on same WiFi: use Mac's LAN IP (run `ipconfig getifaddr en0`)
   // For Android Emulator: '10.0.2.2'
-  static const String _macLanIp = '192.168.0.240';
-  static final String _host =
-      Platform.isAndroid ? '10.0.2.2' : _macLanIp;
+  static const String _macLanIp = '192.168.18.41';
+  static final String _host = Platform.isAndroid ? '10.0.2.2' : _macLanIp;
   static final String _baseUrl = 'http://$_host:3001/api';
+  
+  static String get wsUrl => 'ws://$_host:3001';
 
-  static Future<Map<String, dynamic>> post(String path, Map<String, dynamic> body) async {
+  static Future<Map<String, dynamic>> post(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
     try {
       print("[API] POST $_baseUrl$path");
-      final response = await http.post(
-        Uri.parse('$_baseUrl$path'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(body),
-      ).timeout(const Duration(seconds: 10));
+      final response = await http
+          .post(
+            Uri.parse('$_baseUrl$path'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 10));
 
       return _handleResponse(response);
     } on SocketException {
@@ -34,9 +40,9 @@ class ApiService {
   static Future<Map<String, dynamic>> get(String path) async {
     try {
       print("[API] GET $_baseUrl$path");
-      final response = await http.get(
-        Uri.parse('$_baseUrl$path'),
-      ).timeout(const Duration(seconds: 10));
+      final response = await http
+          .get(Uri.parse('$_baseUrl$path'))
+          .timeout(const Duration(seconds: 10));
 
       return _handleResponse(response);
     } catch (e) {

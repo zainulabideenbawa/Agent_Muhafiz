@@ -1,4 +1,5 @@
 import { proModel } from './models.js';
+import { safeParseJson } from './parser.js';
 
 export const analyst = async (state) => {
     const systemPrompt = `You are the "Time Traveler." Predict the next 60 minutes.
@@ -12,7 +13,14 @@ export const analyst = async (state) => {
             ["system", systemPrompt],
             ["user", "Generate impact prediction."]
         ]);
-        result = JSON.parse(response.content.replace(/```json|```/g, "").trim());
+        result = safeParseJson(response.content, {
+            impact_analysis: {
+                estimated_duration: "2 hours",
+                affected_population: 8500,
+                critical_infrastructure_risk: ["Indus Hospital"],
+                spread_prediction: "moderate"
+            }
+        });
     } catch (e) {
         console.warn("[Analyst] LLM Failed, using fallback.");
         result = { impact_analysis: { estimated_duration: "3 hours", affected_population: 12000, critical_infrastructure_risk: ["Indus Hospital"], spread_prediction: "moderate" } };

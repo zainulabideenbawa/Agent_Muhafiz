@@ -1,4 +1,5 @@
 import { flashModel } from './models.js';
+import { safeParseJson } from './parser.js';
 
 export const communicator = async (state) => {
     const { classification } = state;
@@ -22,9 +23,15 @@ export const communicator = async (state) => {
     try {
         const response = await flashModel.invoke([
             ["system", systemPrompt],
-            ["user", `Crisis: ${classification.type} at ${classification.location?.landmark}`]
+            ["user", `Crisis: ${classification?.type || 'Emergency'} at ${classification?.location?.landmark || 'Karachi'}`]
         ]);
-        result = JSON.parse(response.content.replace(/```json|```/g, "").trim());
+        result = safeParseJson(response.content, {
+            scope: "LOCAL",
+            radius_km: 5,
+            push_notification: { en: "Emergency near you.", ur: "Aapke qareeb hangami surat-e-haal." },
+            whatsapp_draft: { en: "Detailed emergency info.", ur: "Hangami surat-e-haal ki tafseelat." },
+            mayor_brief: "Mayor, please review the Saddar fire report."
+        });
     } catch (e) {
         console.warn("[Communicator] LLM Failed, using fallback.");
         result = {

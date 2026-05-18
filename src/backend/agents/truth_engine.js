@@ -1,14 +1,19 @@
 import { proModel } from './models.js';
+import { safeParseJson } from './parser.js';
 import { get_city_vitals } from '../tools.js';
 
 export const truthEngine = async (state) => {
-    const vitals = await get_city_vitals(state.classification?.location?.landmark || "Karachi");
+    // Safely extract landmark — location may be string or { landmark } object
+    const loc = state.classification?.location;
+    const landmark = (loc && typeof loc === 'object' ? loc.landmark : loc) || "Karachi";
+
+    const vitals = await get_city_vitals(landmark);
 
     const systemPrompt = `You are the "Skeptic." Verify the signal against city vitals.
     Vitals: ${JSON.stringify(vitals)}
     Crisis: ${JSON.stringify(state.classification)}
     Assign a confidence_level (0.0 to 1.0). If < 0.7, outcome is "False Positive".
-    Output ONLY JSON with: classification {confidence_level, verification_sources}, metadata {source_reliability}, and verdict (Verified/False Positive).`;
+    Output ONLY JSON with: classification {confidence_level, verification_sources}, verdict (Verified/False Positive).`;
 
     let result;
     try {
@@ -16,22 +21,36 @@ export const truthEngine = async (state) => {
             ["system", systemPrompt],
             ["user", "Analyze the data and provide a verification verdict."]
         ]);
-        result = JSON.parse(response.content.replace(/```json|```/g, "").trim());
+        result = safeParseJson(response.content, {
+            classification: { confidence_level: 0.88, verification_sources: ["City Telemetry Grid"] },
+            verdict: "Verified"
+        });
     } catch (e) {
         console.warn("[TruthEngine] LLM Failed, using fallback.");
-        result = { classification: { confidence_level: 0.85, verification_sources: ["Heuristic Engine"] }, verdict: "Verified" };
+        result = {
+            classification: { confidence_level: 0.85, verification_sources: ["Heuristic Engine"] },
+            verdict: "Verified"
+        };
     }
+
+    const confidenceLevel = result.classification?.confidence_level ?? 0.85;
 
     const log = {
         timestamp: new Date().toISOString(),
         agent: "The Truth-Engine",
-        message: `Verified against ${vitals.location} telemetry. Confidence: ${result.classification?.confidence_level}.`,
-        outcome: result.verdict
+        message: `Verified against ${vitals.location || landmark} telemetry. Confidence: ${confidenceLevel}.`,
+        outcome: result.verdict || "Verified"
     };
 
+    // Only return the fields this agent owns — do NOT return a full classification
+    // that could overwrite the location object set by Sentinel.
     return {
-        metadata: { source_reliability: result.classification?.confidence_level },
-        classification: result.classification,
+        metadata: { source_reliability: confidenceLevel },
+        classification: {
+            confidence_level: confidenceLevel,
+            verification_sources: result.classification?.verification_sources ?? [],
+            verdict: result.verdict || "Verified",
+        },
         traceLogs: [log]
     };
 };

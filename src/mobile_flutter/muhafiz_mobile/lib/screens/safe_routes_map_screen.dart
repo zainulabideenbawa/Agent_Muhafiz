@@ -95,32 +95,66 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with TickerPr
     try {
       final response = await ApiService.get('/incidents');
       if (response['success'] == true && response['data'] != null) {
-        final List<dynamic> rawList = response['data'];
-        List<Map<String, dynamic>> mappedList = [];
-        
-        for (final item in rawList) {
-          if (item['status'] == 'RESOLVED') continue;
+        final List<dynamic> rawList = response['data'] as List<dynamic>;
+        final List<Map<String, dynamic>> mappedList = [];
 
-          final String title = (item['type'] ?? 'CRISIS').toString().toUpperCase();
-          final String locationName = (item['location'] ?? 'ANALYZING').toString();
-          final String desc = item['description'] ?? 'Analyst Agent scanning area.';
-          final String incidentId = item['incident_id'] ?? 'MHFZ-0000';
-          
+        for (final dynamic raw in rawList) {
+          if (raw is! Map) continue;
+          final item = Map<String, dynamic>.from(raw);
+
+          final String status = (item['status'] ?? '').toString();
+          if (status == 'RESOLVED' || status == 'RETRACTED') continue;
+
+          // Safely extract incident_id — guard against it being a nested object
+          final dynamic rawId = item['incident_id'];
+          final String incidentId = (rawId is String && rawId.isNotEmpty)
+              ? rawId
+              : 'MHFZ-${(item.hashCode.abs() % 9000 + 1000)}';
+
+          // Normalise type — 'UNKNOWN' means still being classified
+          final String rawType = (item['type'] ?? '').toString().toUpperCase();
+          final String title = (rawType.isEmpty || rawType == 'UNKNOWN')
+              ? _inferTypeFromData(item)
+              : rawType;
+
+          // Normalise location — 'ANALYZING' means not yet geocoded
+          final String rawLocation = (item['location'] ?? '').toString();
+          final String locationName =
+              (rawLocation.isEmpty || rawLocation == 'ANALYZING')
+                  ? _inferLocationFromData(item)
+                  : rawLocation;
+
+          // Confidence — LangGraph stores it deep in classification or data
+          final dynamic dataField = item['data'];
+          double confidence = 0.75;
+          if (dataField is Map) {
+            final c = dataField['confidence_level'] ??
+                dataField['confidence'] ??
+                dataField['classification']?['confidence_level'];
+            if (c != null) confidence = (c as num).toDouble().clamp(0.0, 1.0);
+          }
+
+          // Details — try multiple fields
+          final String desc = _safeString(item['description']) ??
+              _safeString(dataField is Map ? dataField['summary'] : null) ??
+              'Analyst Agent scanning area.';
+
           final LatLng coord = _geocode(locationName);
-          final double confidence = (item['data']?['confidence'] ?? 0.85).toDouble();
 
           mappedList.add({
             'id': incidentId,
             'title': title,
             'location': locationName,
             'coordinate': coord,
-            'radius': item['status'] == 'CONFIRMED' ? 450.0 : 300.0, // meters radius
-            'severity': item['status'] == 'CRITICAL' || title.contains('BLAST') ? 'CRITICAL' : 'HIGH',
+            'radius': status == 'CONFIRMED' ? 450.0 : 300.0,
+            'severity': status == 'CRITICAL' || title.contains('BLAST') || title.contains('FIRE')
+                ? 'CRITICAL'
+                : 'HIGH',
             'details': desc,
             'confidence': confidence,
           });
         }
-        
+
         setState(() {
           _activeCrises = mappedList;
           _isLoading = false;
@@ -129,9 +163,35 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with TickerPr
       } else {
         _loadPresets();
       }
-    } catch (e) {
+    } catch (_) {
       _loadPresets();
     }
+  }
+
+  String _inferTypeFromData(Map<String, dynamic> item) {
+    final dynamic data = item['data'];
+    if (data is Map) {
+      final raw = (data['raw_input'] ?? data['signal'] ?? '').toString().toLowerCase();
+      if (raw.contains('fire') || raw.contains('aag')) return 'FIRE';
+      if (raw.contains('flood') || raw.contains('paani') || raw.contains('doob')) return 'FLOOD';
+      if (raw.contains('accident') || raw.contains('crash')) return 'ACCIDENT';
+    }
+    return 'CRISIS';
+  }
+
+  String _inferLocationFromData(Map<String, dynamic> item) {
+    final dynamic data = item['data'];
+    if (data is Map) {
+      final loc = data['location'] ?? data['area'] ?? data['landmark'];
+      if (loc is String && loc.isNotEmpty && loc != 'ANALYZING') return loc;
+    }
+    return 'Karachi';
+  }
+
+  String? _safeString(dynamic v) {
+    if (v == null) return null;
+    if (v is String && v.isNotEmpty) return v;
+    return null;
   }
 
   void _loadPresets() {
@@ -236,7 +296,7 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with TickerPr
                   _buildZoomControls(),
                   if (_isLoading)
                     Container(
-                      color: Colors.black.withOpacity(0.4),
+                      color: Colors.black.withValues(alpha: 0.4),
                       child: const Center(
                         child: CircularProgressIndicator(color: MuhafizTheme.primaryEmerald),
                       ),
@@ -257,7 +317,7 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with TickerPr
       decoration: BoxDecoration(
         color: const Color(0xFF0D182E),
         border: Border(
-          bottom: BorderSide(color: MuhafizTheme.primaryEmerald.withOpacity(0.15)),
+          bottom: BorderSide(color: MuhafizTheme.primaryEmerald.withValues(alpha: 0.15)),
         ),
       ),
       child: Row(
@@ -324,20 +384,21 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with TickerPr
             color: Colors.blueAccent,
             shape: BoxShape.circle,
             border: Border.all(color: Colors.white, width: 2),
-            boxShadow: [BoxShadow(color: Colors.blueAccent.withOpacity(0.5), blurRadius: 8)],
+            boxShadow: [BoxShadow(color: Colors.blueAccent.withValues(alpha: 0.5), blurRadius: 8)],
           ),
           child: const Icon(LucideIcons.user, color: Colors.white, size: 16),
         ),
       ),
-      // Safe Evacuation Hub location
+      // Safe Evacuation Hub
       Marker(
         point: _safeHubLatLng,
-        width: 48,
-        height: 48,
+        width: 72,
+        height: 56,
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
                 color: MuhafizTheme.primaryEmerald,
                 borderRadius: BorderRadius.circular(4),
@@ -364,29 +425,41 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with TickerPr
           point: pos,
           radius: crisis['radius'] as double,
           useRadiusInMeter: true,
-          color: color.withOpacity(0.12),
-          borderColor: color.withOpacity(0.4),
+          color: color.withValues(alpha: 0.12),
+          borderColor: color.withValues(alpha: 0.4),
           borderStrokeWidth: 2,
         ),
       );
 
-      // Warning Pins
+      // Warning Pins — fixed size, no text overflow
       markers.add(
         Marker(
           point: pos,
-          width: 50,
-          height: 50,
+          width: 80,
+          height: 64,
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                constraints: const BoxConstraints(maxWidth: 76),
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                 decoration: BoxDecoration(
                   color: color,
-                  borderRadius: BorderRadius.circular(2),
+                  borderRadius: BorderRadius.circular(3),
                 ),
                 child: Text(
-                  crisis['id'],
-                  style: const TextStyle(color: Colors.black, fontSize: 8, fontWeight: FontWeight.bold),
+                  // Show short ID only — take last 9 chars e.g. "MHFZ-4821"
+                  crisis['id'].toString().length > 9
+                      ? crisis['id'].toString().substring(
+                          crisis['id'].toString().length - 9)
+                      : crisis['id'].toString(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.black,
+                    fontSize: 8,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
               Icon(LucideIcons.alertTriangle, color: color, size: 22),
@@ -420,7 +493,7 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with TickerPr
                 points: _routePoints,
                 strokeWidth: 5.0,
                 color: MuhafizTheme.primaryEmerald,
-                borderColor: MuhafizTheme.primaryEmerald.withOpacity(0.3),
+                borderColor: MuhafizTheme.primaryEmerald.withValues(alpha: 0.3),
                 borderStrokeWidth: 3.0,
               ),
             ],
@@ -440,9 +513,9 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with TickerPr
           padding: const EdgeInsets.all(12),
           width: 170,
           decoration: BoxDecoration(
-            color: const Color(0xFF0F1B35).withOpacity(0.85),
+            color: const Color(0xFF0F1B35).withValues(alpha: 0.85),
             borderRadius: BorderRadius.circular(4),
-            border: Border.all(color: MuhafizTheme.primaryEmerald.withOpacity(0.2)),
+            border: Border.all(color: MuhafizTheme.primaryEmerald.withValues(alpha: 0.2)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -467,9 +540,9 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with TickerPr
                 child: Container(
                   padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
                   decoration: BoxDecoration(
-                    color: MuhafizTheme.primaryEmerald.withOpacity(0.15),
+                    color: MuhafizTheme.primaryEmerald.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(2),
-                    border: Border.all(color: MuhafizTheme.primaryEmerald.withOpacity(0.4)),
+                    border: Border.all(color: MuhafizTheme.primaryEmerald.withValues(alpha: 0.4)),
                   ),
                   child: const Center(
                     child: Text(
@@ -539,8 +612,8 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with TickerPr
       width: 36,
       height: 36,
       decoration: BoxDecoration(
-        color: const Color(0xFF0F1B35).withOpacity(0.85),
-        border: Border.all(color: MuhafizTheme.primaryEmerald.withOpacity(0.2)),
+        color: const Color(0xFF0F1B35).withValues(alpha: 0.85),
+        border: Border.all(color: MuhafizTheme.primaryEmerald.withValues(alpha: 0.2)),
         shape: BoxShape.circle,
       ),
       child: IconButton(
@@ -557,7 +630,7 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with TickerPr
       decoration: BoxDecoration(
         color: const Color(0xFF080F1D),
         border: Border(
-          top: BorderSide(color: MuhafizTheme.primaryEmerald.withOpacity(0.15)),
+          top: BorderSide(color: MuhafizTheme.primaryEmerald.withValues(alpha: 0.15)),
         ),
       ),
       child: Column(
@@ -612,7 +685,7 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with TickerPr
                             color: MuhafizTheme.surfaceSlate,
                             borderRadius: BorderRadius.circular(4),
                             border: Border.all(
-                              color: isCritical ? Colors.redAccent.withOpacity(0.4) : MuhafizTheme.primaryEmerald.withOpacity(0.2),
+                              color: isCritical ? Colors.redAccent.withValues(alpha: 0.4) : MuhafizTheme.primaryEmerald.withValues(alpha: 0.2),
                             ),
                           ),
                           child: Column(
@@ -623,7 +696,7 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with TickerPr
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
-                                      color: isCritical ? Colors.redAccent.withOpacity(0.15) : Colors.amber.withOpacity(0.15),
+                                      color: isCritical ? Colors.redAccent.withValues(alpha: 0.15) : Colors.amber.withValues(alpha: 0.15),
                                       borderRadius: BorderRadius.circular(2),
                                       border: Border.all(
                                         color: isCritical ? Colors.redAccent : Colors.amber,

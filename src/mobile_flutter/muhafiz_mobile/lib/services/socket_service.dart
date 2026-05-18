@@ -1,32 +1,75 @@
-import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'dart:convert';
+import 'dart:io';
+import 'dart:async';
 
 class SocketService {
-  static IO.Socket? socket;
+  static WebSocket? _socket;
+  static final List<Function(Map<String, dynamic>)> _messageListeners = [];
+  static bool _isConnected = false;
 
-  static void connect(String baseUrl, Function(Map<String, dynamic>) onTrace) {
-    socket = IO.io(baseUrl, IO.OptionBuilder()
-      .setTransports(['websocket'])
-      .disableAutoConnect()
-      .build());
+  static bool get isConnected => _isConnected;
 
-    socket!.connect();
+  static void connect(String wsUrl) async {
+    if (_socket != null && _isConnected) return;
+    
+    print("🔌 Attempting WebSocket connection to: $wsUrl");
+    try {
+      _socket = await WebSocket.connect(wsUrl).timeout(const Duration(seconds: 5));
+      _isConnected = true;
+      print("📱 Mobile connected to Muhafiz-X standard WebSocket!");
 
-    socket!.onConnect((_) {
-      print('📱 Mobile connected to Muhafiz-X Socket');
-    });
+      _socket!.listen(
+        (data) {
+          try {
+            final Map<String, dynamic> decoded = jsonDecode(data);
+            print("📩 Received WebSocket data: $decoded");
+            for (var listener in _messageListeners) {
+              listener(decoded);
+            }
+          } catch (e) {
+            print("⚠️ Error decoding WebSocket message: $e");
+          }
+        },
+        onError: (err) {
+          print("⚠️ WebSocket connection error: $err");
+          _isConnected = false;
+          _reconnect(wsUrl);
+        },
+        onDone: () {
+          print("🔌 WebSocket connection closed");
+          _isConnected = false;
+          _reconnect(wsUrl);
+        },
+        cancelOnError: true,
+      );
+    } catch (e) {
+      print("⚠️ WebSocket connect failed: $e");
+      _isConnected = false;
+      _reconnect(wsUrl);
+    }
+  }
 
-    // Listen for real-time agent traces (Complaint status updates)
-    socket!.on('agent_trace', (data) {
-      onTrace(Map<String, dynamic>.from(data));
-    });
+  static void addListener(Function(Map<String, dynamic>) listener) {
+    if (!_messageListeners.contains(listener)) {
+      _messageListeners.add(listener);
+    }
+  }
 
-    // Listen for localized government alerts
-    socket!.on('gov_alert', (data) {
-      // Handle alert banner
+  static void removeListener(Function(Map<String, dynamic>) listener) {
+    _messageListeners.remove(listener);
+  }
+
+  static void _reconnect(String wsUrl) {
+    Future.delayed(const Duration(seconds: 5), () {
+      if (!_isConnected) {
+        connect(wsUrl);
+      }
     });
   }
 
   static void disconnect() {
-    socket?.disconnect();
+    _socket?.close();
+    _socket = null;
+    _isConnected = false;
   }
 }
