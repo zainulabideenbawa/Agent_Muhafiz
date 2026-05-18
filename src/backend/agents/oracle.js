@@ -28,6 +28,8 @@ export const oracle = async (state) => {
         result = { simulation: { success_probability: 0.88, simulation_log: "Heuristic simulation passed.", approved: true } };
     }
 
+    console.log(`[Agent: The Oracle] Virtual rehearsal approved: approved=${result.simulation?.approved}, prob=${result.simulation?.success_probability}`);
+
     const log = {
         timestamp: new Date().toISOString(),
         agent: "The Oracle",

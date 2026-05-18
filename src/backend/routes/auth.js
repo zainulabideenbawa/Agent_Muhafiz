@@ -18,7 +18,7 @@ router.post('/login', async (req, res) => {
 
 router.get('/commander-profile/:id', async (req, res) => {
     const profile = await findCommanderById(req.params.id);
-    res.json(profile || { name: 'Simulated Commander', rank: 'Sovereign-1' });
+    res.json(profile || { commander_id: req.params.id, name: 'Simulated Commander', rank: 'Sovereign-1', department: 'KMC_HEALTH', role: 'DEPT_ADMIN' });
 });
 
 // CITIZEN AUTH (NIC + OTP)
@@ -47,7 +47,12 @@ router.post('/citizen/verify-otp', async (req, res) => {
             sector: 'GENERAL',
             password: 'OIDC_VERIFIED'
         });
-        user = newUsers[0];
+        user = (newUsers && newUsers.length > 0) ? newUsers[0] : {
+            nic_number: nic,
+            name: `Citizen-${nic.slice(-4)}`,
+            sector: 'GENERAL',
+            password: 'OIDC_VERIFIED'
+        };
     }
 
     res.json({ success: true, user });
@@ -60,7 +65,7 @@ router.post('/signup', async (req, res) => {
 
     try {
         let existingUser = await findUserByNic(nic);
-        if (existingUser) {
+        if (existingUser && existingUser.nic_number) {
             return res.status(400).json({ success: false, message: 'Citizen already registered' });
         }
 
@@ -71,7 +76,14 @@ router.post('/signup', async (req, res) => {
             password: password || 'OIDC_VERIFIED'
         });
 
-        res.json({ success: true, user: newUsers[0] });
+        const createdUser = (newUsers && newUsers.length > 0) ? newUsers[0] : {
+            nic_number: nic,
+            name: name || `Citizen-${nic.slice(-4)}`,
+            sector: sector || 'GENERAL',
+            password: password || 'OIDC_VERIFIED'
+        };
+
+        res.json({ success: true, user: createdUser });
     } catch (error) {
         console.error("Signup error:", error);
         res.status(500).json({ success: false, message: 'Enrollment failed' });

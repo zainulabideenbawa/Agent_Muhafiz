@@ -94,6 +94,40 @@ class _GroundTruthScreenState extends State<GroundTruthScreen> {
     }
   }
 
+  Future<void> _handleConfirm(String note) async {
+    setState(() => isSubmitting = true);
+    final success = await ApiService.confirmCrisis(
+      widget.incident['incident_id'] ?? '',
+      note,
+    );
+    if (!mounted) return;
+    if (success) {
+      setState(() {
+        traceLogs.add({
+          'agent': 'The Auditor',
+          'message': 'CRISIS CONFIRMED: $note',
+          'outcome': 'Success',
+        });
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('AUDITOR: Crisis confirmed — ${widget.incident['incident_id']}'),
+          backgroundColor: MuhafizTheme.sovereignGreen,
+        ),
+      );
+      await Future.delayed(const Duration(seconds: 1));
+      if (mounted) Navigator.pop(context);
+    } else {
+      setState(() => isSubmitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+         const SnackBar(
+           content: Text('CONFIRMATION FAILED — CHECK SERVER'),
+           backgroundColor: MuhafizTheme.crisisRed,
+         ),
+      );
+    }
+  }
+
   Future<void> _handleRetract(String reason) async {
     setState(() => isSubmitting = true);
     final success = await ApiService.retractAlert(
@@ -367,7 +401,7 @@ class _GroundTruthScreenState extends State<GroundTruthScreen> {
                     sublabel: 'Situation active — alert remains live',
                     color: MuhafizTheme.crisisRed,
                     icon: Icons.check_circle_outline,
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () => _handleConfirm('Crisis confirmed active by Sindh Police field units.'),
                   ),
                   const SizedBox(height: 12),
                   _buildVerdictButton(

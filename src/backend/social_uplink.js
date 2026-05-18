@@ -17,6 +17,9 @@ const client = new ApifyClient({
 // Standard Polling Interval (10 Minutes)
 const POLLING_INTERVAL = 10 * 60 * 1000; 
 
+const TARGET_ACTOR_ID = process.env.APIFY_ACTOR_ID || 'apify/twitter-scraper';
+const MUHAFIZ_ENDPOINT = process.env.MUHAFIZ_ENDPOINT || 'http://localhost:3001/api/incidents/trigger-crisis';
+
 async function pollSocialIntelligence() {
     console.log(`\n[${new Date().toLocaleTimeString()}] Muhafiz-X: SCANNING DIGITAL GRID...`);
 

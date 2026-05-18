@@ -38,6 +38,8 @@ export const auditor = async (state) => {
         };
     }
 
+    console.log(`[Agent: The Auditor] Final audit: status=${result.status}, score=${result.performance_score}%, policy="${result.policy_recommendation}"`);
+
     const log = {
         timestamp: new Date().toISOString(),
         agent: "The Auditor",

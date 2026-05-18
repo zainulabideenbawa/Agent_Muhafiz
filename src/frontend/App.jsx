@@ -12,6 +12,7 @@ import PublicBroadcast from './components/PublicBroadcast';
 import MissionDashboard from './components/MissionDashboard';
 import SovereignIntelligence from './components/SovereignIntelligence';
 import SovereignLogin from './components/SovereignLogin';
+import CrisisExplorer from './components/CrisisExplorer';
 
 function App() {
   const [user, setUser] = useState(null); // AUTH STATE
@@ -33,7 +34,7 @@ function App() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const res = await fetch(`http://localhost:3001/api/department-resources/${activeDept}`);
+        const res = await fetch(`http://127.0.0.1:3001/api/department-resources/${activeDept}`);
         const hubs = await res.json();
         if (Array.isArray(hubs)) {
           const totals = hubs.reduce((acc, h) => ({
@@ -59,7 +60,7 @@ function App() {
   useEffect(() => { activeDeptRef.current = activeDept; }, [activeDept]);
 
   useEffect(() => {
-    const websocket = new WebSocket('ws://localhost:3001');
+    const websocket = new WebSocket('ws://127.0.0.1:3001');
     websocket.onmessage = (event) => {
       const data = JSON.parse(event.data);
       if (data.type === 'TRACE_LOG') {
@@ -100,14 +101,17 @@ function App() {
   });
   const safeDeptStats = deptStats || { officers: 0, trucks: 0, ambulances: 0 };
 
-  const triggerSimulation = async (type = "flood") => {
+  const triggerSimulation = async (type = "flood", customInput = null) => {
     if (isSimulating) return;
-    const hotspots = ["NIPA Chowrangi", "Saddar", "Clifton", "Gulshan", "Defence"];
-    const landmark = hotspots[Math.floor(Math.random() * hotspots.length)];
-    const input = type === "flood" ? `${landmark} doob gaya!` : `Fire reported at ${landmark} factory!`;
+    let input = customInput;
+    if (!input) {
+      const hotspots = ["NIPA Chowrangi", "Saddar", "Clifton", "Gulshan", "Defence"];
+      const landmark = hotspots[Math.floor(Math.random() * hotspots.length)];
+      input = type === "flood" ? `${landmark} doob gaya!` : `Fire reported at ${landmark} factory!`;
+    }
     setIsSimulating(true);
     try {
-      await fetch('http://localhost:3001/api/trigger-crisis', {
+      await fetch('http://127.0.0.1:3001/api/incidents/trigger-crisis', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ input })
@@ -134,8 +138,8 @@ function App() {
         
         {/* Left: Sovereign Sidebar (Asset Management) */}
         <div 
-          className="absolute left-0 top-0 bottom-0 z-40 transition-all duration-500 ease-in-out"
-          style={{ width: '288px', transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)', paddingTop: '56px' }}
+          className="absolute left-0 top-0 bottom-0 z-40 transition-all duration-500 ease-in-out overflow-hidden"
+          style={{ width: sidebarOpen ? '288px' : '64px', paddingTop: '56px' }}
         >
           <SovereignSidebar 
             activeDept={activeDept} 
@@ -146,11 +150,16 @@ function App() {
             dashboardView={dashboardView}
             setDashboardView={setDashboardView}
             user={user}
+            sidebarOpen={sidebarOpen}
+            setSidebarOpen={setSidebarOpen}
           />
         </div>
 
         {/* Center: Tactical Map / Strategic Audit */}
-        <div className="flex-1 relative bg-zinc-900">
+        <div 
+          className="flex-1 relative bg-zinc-900 transition-all duration-500"
+          style={{ paddingLeft: dashboardView === 'TACTICAL' ? '0px' : (sidebarOpen ? '288px' : '64px') }}
+        >
           {dashboardView === 'TACTICAL' ? (
             <div className="w-full h-full relative">
               <DigitalTwinMap 
@@ -165,7 +174,7 @@ function App() {
               {/* Tactical Overlays (Map Space Only) */}
               <div 
                 className="absolute top-6 left-6 z-20 transition-all duration-500" 
-                style={{ transform: sidebarOpen ? 'translateX(288px)' : 'translateX(0)' }}
+                style={{ transform: sidebarOpen ? 'translateX(288px)' : 'translateX(64px)' }}
               >
                 <TacticalLegend />
               </div>
@@ -199,6 +208,10 @@ function App() {
           ) : dashboardView === 'MISSIONS' ? (
             <div className="w-full h-full overflow-y-auto bg-black/5 backdrop-blur-md animate-in fade-in duration-500">
               <MissionDashboard />
+            </div>
+          ) : dashboardView === 'ARCHIVE' ? (
+            <div className="w-full h-full overflow-y-auto bg-black/5 backdrop-blur-md animate-in fade-in duration-500">
+              <CrisisExplorer incidents={filteredIncidents} traces={filteredTraces} />
             </div>
           ) : dashboardView === 'ADMIN' ? (
             <div className="w-full h-full overflow-y-auto bg-black/5 backdrop-blur-md animate-in fade-in duration-500">

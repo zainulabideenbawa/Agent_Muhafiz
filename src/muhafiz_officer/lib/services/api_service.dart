@@ -45,6 +45,20 @@ class ApiService {
     }
   }
 
+  static Future<bool> confirmCrisis(String incidentId, String note) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/incidents/confirm-crisis'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'incidentId': incidentId, 'note': note}),
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      print('Error confirming crisis: $e');
+      return false;
+    }
+  }
+
   static Future<bool> acceptQuest(String incidentId) async {
     try {
       final response = await http.post(

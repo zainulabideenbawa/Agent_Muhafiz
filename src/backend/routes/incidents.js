@@ -18,6 +18,7 @@ router.post('/trigger-crisis', async (req, res) => {
     const incidentId = `MHFZ-${Math.floor(1000 + Math.random() * 9000)}`;
     await saveIncident(incidentId, 'UNKNOWN', 'ANALYZING', input);
     runSovereignLogic(incidentId, input);
+    console.log(`[Incident Triggered] ${input}`);
     res.json({ success: true, incidentId });
 });
 
@@ -68,6 +69,35 @@ router.post('/accept-quest', async (req, res) => {
             log: {
                 agent: 'The TruthEngine',
                 message: 'Quest Accepted. Officer status updated to EN ROUTE.',
+                outcome: 'Success'
+            }
+        });
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+router.post('/confirm-crisis', async (req, res) => {
+    const { incidentId, note } = req.body;
+    console.log(`[Auditor Agent] CRISIS CONFIRMED: ${incidentId} - ${note}`);
+    try {
+        await updateIncidentState(incidentId, 'CONFIRMED', {
+            officer_verdict: 'CONFIRMED',
+            officer_note: note || 'Crisis confirmed by field agent.',
+            traceLogs: [{
+                agent: 'The Auditor',
+                message: `CRISIS CONFIRMED: Human-in-the-loop verification confirms the crisis remains active.`,
+                outcome: 'Success',
+                timestamp: new Date().toISOString()
+            }]
+        });
+        broadcast({
+            type: 'TRACE_LOG',
+            incidentId,
+            log: {
+                agent: 'The Auditor',
+                message: `CRISIS CONFIRMED: Human-in-the-loop verification confirms the crisis remains active.`,
                 outcome: 'Success'
             }
         });

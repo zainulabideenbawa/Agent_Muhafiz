@@ -45,13 +45,30 @@ export const updateDepartmentResources = async (deptId, hubs) => {
 
 export const deployHub = async (dept, sector) => {
     if (db) {
-        await db.insert(department_hubs).values({
-            dept_id: dept,
+        try {
+            await db.insert(department_hubs).values({
+                dept_id: dept,
+                name: `${sector} Station`,
+                location: sector,
+                trucks: 5,
+                ambulances: 2,
+                officers: 10,
+            });
+        } catch (e) { console.error("DB deployHub Failed:", e); }
+    }
+    if (!departmentResources[dept]) {
+        departmentResources[dept] = [];
+    }
+    // Check if station already exists to prevent duplicate mocks
+    const exists = departmentResources[dept].some(h => h.location === sector);
+    if (!exists) {
+        departmentResources[dept].push({
+            id: `HUB-${Date.now()}`,
             name: `${sector} Station`,
             location: sector,
             trucks: 5,
             ambulances: 2,
-            officers: 10,
+            officers: 10
         });
     }
 };
