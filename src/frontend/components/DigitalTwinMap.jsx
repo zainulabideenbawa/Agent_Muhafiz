@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import Map, { Marker } from "react-map-gl/mapbox";
+import Map, { Marker, Popup } from "react-map-gl/mapbox";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { Activity, Thermometer, Wind, Droplets, Flame, AlertTriangle, Shield, TrendingUp } from 'lucide-react';
 import DeckGL from '@deck.gl/react';
@@ -18,6 +18,7 @@ const DigitalTwinMap = ({ incidents, onMarkerClick }) => {
 
     const [sensors, setSensors] = useState([]);
     const [selectedSensor, setSelectedSensor] = useState(null);
+    const [selectedIncidentTooltip, setSelectedIncidentTooltip] = useState(null);
     const [showRiskMap, setShowRiskMap] = useState(false);
 
     useEffect(() => {
@@ -90,7 +91,11 @@ const DigitalTwinMap = ({ incidents, onMarkerClick }) => {
                             key={`inc-${idx}`} 
                             longitude={incident.location?.lng || 67.05} 
                             latitude={incident.location?.lat || 24.89}
-                            onClick={e => { e.originalEvent.stopPropagation(); onMarkerClick(incident); }}
+                            onClick={e => { 
+                                e.originalEvent.stopPropagation(); 
+                                setSelectedIncidentTooltip(incident);
+                                onMarkerClick(incident); 
+                            }}
                         >
                             <div className="flex flex-col items-center cursor-pointer group">
                                 <div className="animate-ping absolute w-8 h-8 rounded-full opacity-40 bg-red-500" />
@@ -100,6 +105,82 @@ const DigitalTwinMap = ({ incidents, onMarkerClick }) => {
                             </div>
                         </Marker>
                     ))}
+
+                    {/* Incident Tactical Tooltip Popup */}
+                    {selectedIncidentTooltip && (
+                        <Popup
+                            longitude={selectedIncidentTooltip.location?.lng || 67.05}
+                            latitude={selectedIncidentTooltip.location?.lat || 24.89}
+                            anchor="bottom"
+                            onClose={() => setSelectedIncidentTooltip(null)}
+                            closeOnClick={false}
+                        >
+                            <div className="w-[280px] bg-zinc-950/90 border border-white/10 rounded-[2rem] backdrop-blur-3xl p-5 shadow-2xl flex flex-col gap-4 text-zinc-300 pointer-events-auto">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border bg-red-500/10 border-red-500/20 text-red-400 flex items-center gap-1.5">
+                                        <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-ping" />
+                                        Crisis Triage
+                                    </span>
+                                    <button 
+                                        onClick={() => setSelectedIncidentTooltip(null)} 
+                                        className="text-zinc-500 hover:text-white transition-all text-[8px] font-black uppercase bg-white/5 w-6 h-6 rounded-full flex items-center justify-center border border-white/5"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+
+                                <div className="flex flex-col gap-0.5">
+                                    <h3 className="text-white text-[12px] font-black uppercase tracking-tight">
+                                        {selectedIncidentTooltip.location?.landmark || "Karachi Region"}
+                                    </h3>
+                                    <p className="text-[8px] font-mono text-zinc-500 uppercase tracking-widest">
+                                        Ref: {selectedIncidentTooltip.id || "MHFZ-Simulated"}
+                                    </p>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-3 flex flex-col gap-1">
+                                        <span className="text-[7px] text-zinc-500 block uppercase font-bold tracking-wider">Triage Level</span>
+                                        <span className="text-red-400 font-mono text-[10px] font-black flex items-center gap-1">
+                                            <AlertTriangle size={8} /> Level 8
+                                        </span>
+                                    </div>
+                                    <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-3 flex flex-col gap-1">
+                                        <span className="text-[7px] text-zinc-500 block uppercase font-bold tracking-wider">Department</span>
+                                        <span className="text-orange-400 font-mono text-[9px] font-black uppercase truncate">
+                                            {selectedIncidentTooltip.department?.replace('_', ' ') || 'FIRE BRIGADE'}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="bg-white/[0.01] border border-white/5 rounded-2xl p-3.5 flex flex-col gap-2">
+                                    <div className="flex items-center justify-between text-[8px] font-mono text-zinc-400">
+                                        <span>SIGNAL SOURCE:</span>
+                                        <span className="text-blue-400 font-bold uppercase">
+                                            {selectedIncidentTooltip.type === 'fire' ? 'OSINT Twitter' : 'Citizen App'}
+                                        </span>
+                                    </div>
+                                    <div className="h-[1px] bg-white/5" />
+                                    <div className="flex items-center justify-between text-[8px] font-mono text-zinc-400">
+                                        <span>TACTICAL STATUS:</span>
+                                        <span className="text-emerald-400 font-bold uppercase animate-pulse">
+                                            Active Dispatch
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <button 
+                                    onClick={() => {
+                                        onMarkerClick(selectedIncidentTooltip);
+                                        setSelectedIncidentTooltip(null);
+                                    }}
+                                    className="w-full py-3.5 bg-zinc-900 border border-white/10 hover:bg-zinc-800 text-white rounded-2xl text-[8px] font-black uppercase tracking-[0.15em] transition-all shadow-xl flex items-center justify-center gap-2"
+                                >
+                                    <Shield size={10} /> Open Tactical Command
+                                </button>
+                            </div>
+                        </Popup>
+                    )}
 
                     {/* Sensors */}
                     {sensors.map(sensor => (

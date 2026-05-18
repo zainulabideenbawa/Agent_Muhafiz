@@ -55,8 +55,9 @@ class _GroundTruthScreenState extends State<GroundTruthScreen>
     });
 
     // POST to backend — update incident state
-    final response = await ApiService.post('/incidents/trigger-crisis', {
-      'input': 'Ground Truth Confirmed: ${_resolvedIncidentId ?? "UNKNOWN"}',
+    final response = await ApiService.post('/incidents/confirm-crisis', {
+      'incidentId': _resolvedIncidentId ?? 'MHFZ-UNKNOWN',
+      'note': 'Ground truth confirmed by citizen.',
     });
 
     await Future.delayed(const Duration(milliseconds: 800));

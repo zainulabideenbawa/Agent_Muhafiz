@@ -8,7 +8,7 @@ const MetricsUI = ({ activeCrises, deptStats, livesSaved, toggleSidebar, activeD
     React.useEffect(() => {
         const fetchVitals = async () => {
             try {
-                const res = await fetch('http://localhost:3001/api/city-vitals');
+                const res = await fetch('http://127.0.0.1:3001/api/city-vitals');
                 const data = await res.json();
                 setVitals(data);
             } catch (e) { console.error(e); }

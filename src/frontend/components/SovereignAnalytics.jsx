@@ -7,7 +7,7 @@ const SovereignAnalytics = ({ activeDept, departments }) => {
     useEffect(() => {
         const fetchStats = async () => {
             try {
-                const res = await fetch(`http://localhost:3001/api/performance/${activeDept}`);
+                const res = await fetch(`http://127.0.0.1:3001/api/performance/${activeDept}`);
                 const data = await res.json();
                 setStats(data);
             } catch (e) { console.error(e); }

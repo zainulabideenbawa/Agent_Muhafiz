@@ -83,44 +83,36 @@ class _GroundTruthScreenState extends State<GroundTruthScreen> {
     }
   }
 
-  Future<void> _handleConfirm() async {
+  Future<void> _handleConfirm(String note) async {
     setState(() => isSubmitting = true);
-    try {
-      final success = await ApiService.confirmCrisis(
-        widget.incident['incident_id'] ?? '',
-      );
-      if (!mounted) return;
-      if (success) {
-        setState(() {
-          traceLogs.add({
-            'agent': 'The Auditor',
-            'message': 'CRISIS CONFIRMED: ${widget.incident['incident_id']}',
-            'outcome': 'Success',
-          });
+    final success = await ApiService.confirmCrisis(
+      widget.incident['incident_id'] ?? '',
+      note,
+    );
+    if (!mounted) return;
+    if (success) {
+      setState(() {
+        traceLogs.add({
+          'agent': 'The Auditor',
+          'message': 'CRISIS CONFIRMED: $note',
+          'outcome': 'Success',
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('CONFIRMED: ${widget.incident['incident_id']} — alert remains active.'),
-            backgroundColor: MuhafizTheme.crisisRed,
-          ),
-        );
-        await Future.delayed(const Duration(seconds: 1));
-        if (mounted) Navigator.pop(context);
-      } else {
-        setState(() => isSubmitting = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('CONFIRM FAILED — CHECK SERVER'),
-            backgroundColor: MuhafizTheme.crisisRed,
-          ),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => isSubmitting = false);
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('ERROR: $e'),
+          content: Text(
+            'AUDITOR: Crisis confirmed — ${widget.incident['incident_id']}',
+          ),
+          backgroundColor: MuhafizTheme.sovereignGreen,
+        ),
+      );
+      await Future.delayed(const Duration(seconds: 1));
+      if (mounted) Navigator.pop(context);
+    } else {
+      setState(() => isSubmitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('CONFIRMATION FAILED — CHECK SERVER'),
           backgroundColor: MuhafizTheme.crisisRed,
         ),
       );
@@ -144,7 +136,9 @@ class _GroundTruthScreenState extends State<GroundTruthScreen> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('AUDITOR: Alert retracted — ${widget.incident['incident_id']}'),
+          content: Text(
+            'AUDITOR: Alert retracted — ${widget.incident['incident_id']}',
+          ),
           backgroundColor: MuhafizTheme.sovereignGreen,
         ),
       );
@@ -180,7 +174,10 @@ class _GroundTruthScreenState extends State<GroundTruthScreen> {
                 children: [
                   // Incident location chip
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
                     decoration: BoxDecoration(
                       color: MuhafizTheme.tacticalGray,
                       borderRadius: BorderRadius.circular(10),
@@ -188,7 +185,11 @@ class _GroundTruthScreenState extends State<GroundTruthScreen> {
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.location_on, color: MuhafizTheme.crisisRed, size: 16),
+                        const Icon(
+                          Icons.location_on,
+                          color: MuhafizTheme.crisisRed,
+                          size: 16,
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -202,11 +203,20 @@ class _GroundTruthScreenState extends State<GroundTruthScreen> {
                           ),
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
                           decoration: BoxDecoration(
-                            color: MuhafizTheme.crisisRed.withValues(alpha: 0.1),
+                            color: MuhafizTheme.crisisRed.withValues(
+                              alpha: 0.1,
+                            ),
                             borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: MuhafizTheme.crisisRed.withValues(alpha: 0.4)),
+                            border: Border.all(
+                              color: MuhafizTheme.crisisRed.withValues(
+                                alpha: 0.4,
+                              ),
+                            ),
                           ),
                           child: Text(
                             widget.incident['status'] ?? 'ACTIVE',
@@ -266,14 +276,18 @@ class _GroundTruthScreenState extends State<GroundTruthScreen> {
                                     children: [
                                       Icon(
                                         Icons.camera_enhance_outlined,
-                                        color: Colors.white.withValues(alpha: 0.08),
+                                        color: Colors.white.withValues(
+                                          alpha: 0.08,
+                                        ),
                                         size: 64,
                                       ),
                                       const SizedBox(height: 10),
                                       Text(
                                         'NO EVIDENCE CAPTURED',
                                         style: TextStyle(
-                                          color: Colors.white.withValues(alpha: 0.15),
+                                          color: Colors.white.withValues(
+                                            alpha: 0.15,
+                                          ),
                                           fontFamily: 'monospace',
                                           fontSize: 10,
                                           letterSpacing: 1.5,
@@ -289,7 +303,10 @@ class _GroundTruthScreenState extends State<GroundTruthScreen> {
                           top: 10,
                           left: 12,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 3,
+                            ),
                             decoration: BoxDecoration(
                               border: Border.all(
                                 color: _capturedImage != null
@@ -314,7 +331,9 @@ class _GroundTruthScreenState extends State<GroundTruthScreen> {
                                 ),
                                 const SizedBox(width: 5),
                                 Text(
-                                  _capturedImage != null ? 'EVIDENCE LOGGED' : 'AWAITING CAPTURE',
+                                  _capturedImage != null
+                                      ? 'EVIDENCE LOGGED'
+                                      : 'AWAITING CAPTURE',
                                   style: TextStyle(
                                     color: _capturedImage != null
                                         ? MuhafizTheme.sovereignGreen
@@ -339,7 +358,10 @@ class _GroundTruthScreenState extends State<GroundTruthScreen> {
                                 Expanded(
                                   child: ElevatedButton.icon(
                                     onPressed: _openCamera,
-                                    icon: const Icon(Icons.camera_alt, size: 16),
+                                    icon: const Icon(
+                                      Icons.camera_alt,
+                                      size: 16,
+                                    ),
                                     label: const Text(
                                       'CAPTURE EVIDENCE',
                                       style: TextStyle(
@@ -350,9 +372,12 @@ class _GroundTruthScreenState extends State<GroundTruthScreen> {
                                       ),
                                     ),
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: MuhafizTheme.sovereignGreen,
+                                      backgroundColor:
+                                          MuhafizTheme.sovereignGreen,
                                       foregroundColor: Colors.black,
-                                      padding: const EdgeInsets.symmetric(vertical: 10),
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 10,
+                                      ),
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(8),
                                       ),
@@ -365,13 +390,21 @@ class _GroundTruthScreenState extends State<GroundTruthScreen> {
                                   onPressed: _openGallery,
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor: MuhafizTheme.textSecondary,
-                                    side: const BorderSide(color: MuhafizTheme.surfaceBorder),
-                                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                                    side: const BorderSide(
+                                      color: MuhafizTheme.surfaceBorder,
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 10,
+                                      horizontal: 12,
+                                    ),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                   ),
-                                  child: const Icon(Icons.photo_library_outlined, size: 20),
+                                  child: const Icon(
+                                    Icons.photo_library_outlined,
+                                    size: 20,
+                                  ),
                                 ),
                               ],
                             ),
@@ -400,7 +433,9 @@ class _GroundTruthScreenState extends State<GroundTruthScreen> {
                     sublabel: 'Situation active — alert remains live',
                     color: MuhafizTheme.crisisRed,
                     icon: Icons.check_circle_outline,
-                    onPressed: _handleConfirm,
+                    onPressed: () => _handleConfirm(
+                      'Crisis confirmed active by Sindh Police field units.',
+                    ),
                   ),
                   const SizedBox(height: 12),
                   _buildVerdictButton(
@@ -408,7 +443,8 @@ class _GroundTruthScreenState extends State<GroundTruthScreen> {
                     sublabel: 'No crisis found — retract alert system-wide',
                     color: MuhafizTheme.cautionAmber,
                     icon: Icons.error_outline,
-                    onPressed: () => _handleRetract('False Alarm / Sensor Mismatch'),
+                    onPressed: () =>
+                        _handleRetract('False Alarm / Sensor Mismatch'),
                   ),
                   const SizedBox(height: 12),
                   _buildVerdictButton(
@@ -416,7 +452,8 @@ class _GroundTruthScreenState extends State<GroundTruthScreen> {
                     sublabel: 'Area secured — close and archive incident',
                     color: MuhafizTheme.sovereignGreen,
                     icon: Icons.map_outlined,
-                    onPressed: () => _handleRetract('Road Re-opened / Water Cleared'),
+                    onPressed: () =>
+                        _handleRetract('Road Re-opened / Water Cleared'),
                   ),
                 ],
               ),
@@ -442,7 +479,9 @@ class _GroundTruthScreenState extends State<GroundTruthScreen> {
       child: OutlinedButton(
         style: OutlinedButton.styleFrom(
           side: BorderSide(color: color.withValues(alpha: 0.5)),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           backgroundColor: color.withValues(alpha: 0.05),
           padding: const EdgeInsets.symmetric(horizontal: 20),
         ),
@@ -484,7 +523,11 @@ class _GroundTruthScreenState extends State<GroundTruthScreen> {
                 child: CircularProgressIndicator(color: color, strokeWidth: 2),
               )
             else
-              Icon(Icons.chevron_right, color: color.withValues(alpha: 0.5), size: 20),
+              Icon(
+                Icons.chevron_right,
+                color: color.withValues(alpha: 0.5),
+                size: 20,
+              ),
           ],
         ),
       ),

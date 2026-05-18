@@ -46,7 +46,7 @@ export const command_profiles = pgTable('command_profiles', {
 export const mission_tasks = pgTable('mission_tasks', {
     id: serial('id').primaryKey(),
     task_id: text('task_id').unique().notNull(),
-    incident_ref: text('incident_ref').references(() => incidents.incident_id),
+    incident_ref: text('incident_ref').references(incidents.incident_id),
     status: text('status').default('INGESTED'),
     assigned_hub: text('assigned_hub'),
     assigned_agent: text('assigned_agent'),

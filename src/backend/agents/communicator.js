@@ -43,6 +43,8 @@ export const communicator = async (state) => {
         };
     }
 
+    console.log(`[Agent: The Communicator] Broadcast scope: ${result.scope} (${result.radius_km}km). Push EN: "${result.push_notification?.en}"`);
+
     const log = {
         timestamp: new Date().toISOString(),
         agent: "The Communicator",

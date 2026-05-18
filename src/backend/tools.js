@@ -3,7 +3,7 @@
  * These functions connect the Agents to the Backend REST APIs.
  */
 
-const BACKEND_URL = "http://localhost:3001";
+const BACKEND_URL = "http://127.0.0.1:3001";
 
 /**
  * Tool for The Truth-Engine: Connects to /tools/vitals
