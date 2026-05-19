@@ -41,8 +41,14 @@ const CrisisExplorer = ({ incidents = [], traces = [] }) => {
         
         // Match type from raw signal if type is not set
         const lowerSignal = (inc.signal_text || "").toLowerCase();
-        const detectedType = inc.type !== 'UNKNOWN' ? inc.type.toLowerCase() : 
-            (lowerSignal.includes('fire') || lowerSignal.includes('aag') || lowerSignal.includes('jal') ? 'fire' : 'flood');
+        let detectedType = inc.type !== 'UNKNOWN' ? inc.type.toLowerCase() : 'flood';
+        if (lowerSignal.includes('fire') || lowerSignal.includes('aag') || lowerSignal.includes('jal')) {
+            detectedType = 'fire';
+        } else if (lowerSignal.includes('blast') || lowerSignal.includes('dhamaka') || lowerSignal.includes('explosion') || lowerSignal.includes('bomb')) {
+            detectedType = 'blast';
+        } else if (lowerSignal.includes('protest') || lowerSignal.includes('dharna') || lowerSignal.includes('strike') || lowerSignal.includes('rally')) {
+            detectedType = 'protest';
+        }
 
         const cleanLocationName = getCleanLandmark(inc);
 
@@ -166,6 +172,8 @@ const CrisisExplorer = ({ incidents = [], traces = [] }) => {
                             <option value="ALL" className="bg-zinc-950 text-zinc-300">All Categories</option>
                             <option value="FIRE" className="bg-zinc-950 text-zinc-300">Fires / Aag</option>
                             <option value="FLOOD" className="bg-zinc-950 text-zinc-300">Floods / Pani</option>
+                            <option value="BLAST" className="bg-zinc-950 text-zinc-300">Blasts / Dhamaka</option>
+                            <option value="PROTEST" className="bg-zinc-950 text-zinc-300">Protests / Dharna</option>
                         </select>
                     </div>
 
@@ -249,9 +257,16 @@ const CrisisExplorer = ({ incidents = [], traces = [] }) => {
                                     <div className={`p-4 rounded-2xl border shrink-0 ${
                                         inc.type === 'fire' 
                                             ? 'bg-orange-500/10 border-orange-500/20 text-orange-400' 
+                                            : inc.type === 'blast'
+                                            ? 'bg-red-500/10 border-red-500/20 text-red-400'
+                                            : inc.type === 'protest'
+                                            ? 'bg-purple-500/10 border-purple-500/20 text-purple-400'
                                             : 'bg-blue-500/10 border-blue-500/20 text-blue-400'
                                     }`}>
-                                        {inc.type === 'fire' ? <Flame size={18} /> : <Droplets size={18} />}
+                                        {inc.type === 'fire' ? <Flame size={18} /> : 
+                                         inc.type === 'blast' ? <AlertTriangle size={18} /> :
+                                         inc.type === 'protest' ? <Shield size={18} /> : 
+                                         <Droplets size={18} />}
                                     </div>
 
                                     {/* Core details */}

@@ -25,7 +25,7 @@ export const getIncidentById = async (incidentId) => {
             .where(eq(incidents.incident_id, incidentId));
         if (result.length > 0) return result[0];
         return null;
-    } catch (e) { 
+    } catch (e) {
         console.error("DB getIncidentById Failed:", e);
         throw e;
     }
@@ -36,7 +36,7 @@ export const updateIncidentState = async (incidentId, status, data) => {
         // We need to fetch existing incident to merge data properly
         const existingIncident = await getIncidentById(incidentId);
         let mergedData = data;
-        
+
         if (existingIncident) {
             const currentData = existingIncident.data || {};
             let mergedLogs = currentData.traceLogs || [];
@@ -61,9 +61,9 @@ export const updateIncidentState = async (incidentId, status, data) => {
             .set({ status, data: mergedData, last_agent: lastAgent })
             .where(eq(incidents.incident_id, incidentId))
             .returning();
-            
+
         return result;
-    } catch (e) { 
+    } catch (e) {
         console.error("DB updateIncidentState Failed:", e);
         throw e;
     }
@@ -74,7 +74,7 @@ export const getPendingIncidents = async () => {
         return await db.select().from(incidents)
             .where(eq(incidents.status, 'PENDING'))
             .orderBy(asc(incidents.created_at));
-    } catch (e) { 
+    } catch (e) {
         console.error("DB getPendingIncidents Failed:", e);
         throw e;
     }
@@ -86,7 +86,7 @@ export const getAllIncidents = async (limit = 20) => {
             .orderBy(asc(incidents.created_at))
             .limit(limit);
         return results;
-    } catch (e) { 
+    } catch (e) {
         console.error("DB getAllIncidents Failed:", e);
         throw e;
     }

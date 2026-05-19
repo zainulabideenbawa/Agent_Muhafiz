@@ -38,9 +38,7 @@ const resolveHotspotCoordinates = (locationName) => {
 };
 
 function App() {
-  const [user, setUser] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('muhafiz_user')) || null; } catch { return null; }
-  });
+  const [user, setUser] = useState(null); // AUTH STATE
   const [traces, setTraces] = useState([]);
   const [isSimulating, setIsSimulating] = useState(false);
   const [ws, setWs] = useState(null);
@@ -50,11 +48,12 @@ function App() {
   const [dashboardView, setDashboardView] = useState('TACTICAL'); // 'TACTICAL' | 'STRATEGIC'
   const [deptStats, setDeptStats] = useState({ officers: 0, trucks: 0, ambulances: 0 });
   const [sidebarView, setSidebarView] = useState('dashboard'); // 'dashboard' | 'edit'
-  
+
   // Dashboard state
   const [livesSaved, setLivesSaved] = useState(0);
   const [incidents, setIncidents] = useState([]);
   const [selectedIncident, setSelectedIncident] = useState(null);
+  const [resolutionAlert, setResolutionAlert] = useState(null); // for False Alarm / Road Clear / Confirmed banners
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -82,12 +81,22 @@ function App() {
         if (Array.isArray(dbIncidents)) {
           const mappedIncidents = dbIncidents.map(inc => {
             const landmarkName = inc.location || 'NIPA Chowrangi';
-            const coords = resolveHotspotCoordinates(landmarkName);
+            // Prioritize coordinates geocoded by Google Maps in the backend
+            const hasBackendCoords = inc.data?.classification?.location?.lat && inc.data?.classification?.location?.lng;
+            const coords = hasBackendCoords
+              ? { lng: inc.data.classification.location.lng, lat: inc.data.classification.location.lat }
+              : resolveHotspotCoordinates(landmarkName);
+
+            let dept = 'KMC_HEALTH';
+            if (inc.type === 'FIRE' || inc.type === 'FIRE_BRIGADE') dept = 'FIRE_BRIGADE';
+            else if (inc.type === 'POLICE_FORCE') dept = 'POLICE_FORCE';
+            else if (inc.type === 'RESCUE_1122') dept = 'RESCUE_1122';
+
             return {
               id: inc.incident_id,
-              department: inc.type === 'FIRE' ? 'FIRE_BRIGADE' : 'KMC_HEALTH',
+              department: dept,
               type: inc.type?.toLowerCase() || 'urban_flood',
-              location: { 
+              location: {
                 landmark: landmarkName,
                 lng: coords.lng,
                 lat: coords.lat
@@ -137,21 +146,26 @@ function App() {
       const data = JSON.parse(event.data);
       if (data.type === 'TRACE_LOG') {
         console.log(`[Tactical] Incoming Log: ${data.log.agent} for ${data.assigned_department}`);
-        
-        setTraces(prev => [...prev, { 
-          incidentId: data.incidentId, 
-          log: { ...data.log, timestamp: data.log.timestamp || Date.now() }, 
-          department: data.assigned_department 
+
+        setTraces(prev => [...prev, {
+          incidentId: data.incidentId,
+          log: { ...data.log, timestamp: data.log.timestamp || Date.now() },
+          department: data.assigned_department
         }]);
 
         if (data.log.agent === 'The Sentinel' && data.log.outcome === 'Success') {
-          const landmarkName = data.log.message.split('at ')[1]?.replace('.', '') || 'NIPA Chowrangi';
-          const coords = resolveHotspotCoordinates(landmarkName);
+          const sentinelLoc = data.log.details?.location;
+          const landmarkName = sentinelLoc?.landmark || data.log.message.split('at ')[1]?.replace('.', '') || 'NIPA Chowrangi';
+          const hasBackendCoords = sentinelLoc?.lat && sentinelLoc?.lng;
+          const coords = hasBackendCoords
+            ? { lng: sentinelLoc.lng, lat: sentinelLoc.lat }
+            : resolveHotspotCoordinates(landmarkName);
+
           setIncidents(prev => [...prev, {
             id: data.incidentId,
             department: data.assigned_department,
             type: data.log.message.includes('fire') ? 'fire' : 'urban_flood',
-            location: { 
+            location: {
               landmark: landmarkName,
               lng: coords.lng,
               lat: coords.lat
@@ -166,25 +180,25 @@ function App() {
           const isConfirmed = data.log.message.includes('CONFIRMED') || data.log.message.includes('confirm') || data.log.message.includes('CONFIRM');
           const isResolved = data.log.outcome === 'Crisis Resolved' || data.log.message.includes('Resolved') || data.log.message.includes('resolved');
           const newStatus = isRetracted ? 'RETRACTED' : (isConfirmed ? 'CONFIRMED' : (isResolved ? 'RESOLVED' : 'ACTIVE'));
-          
-          setIncidents(prevIncidents => prevIncidents.map(inc => 
-            inc.id === data.incidentId 
-              ? { 
-                  ...inc, 
-                  status: newStatus,
-                  data: {
-                    ...inc.data,
-                    retraction_reason: isRetracted ? data.log.message.split('confirms ')[1]?.replace('.', '') : inc.data?.retraction_reason,
-                    officer_note: isConfirmed ? data.log.message.split('confirms ')[1]?.replace('.', '') : inc.data?.officer_note
-                  }
-                } 
+
+          setIncidents(prevIncidents => prevIncidents.map(inc =>
+            inc.id === data.incidentId
+              ? {
+                ...inc,
+                status: newStatus,
+                data: {
+                  ...inc.data,
+                  retraction_reason: isRetracted ? data.log.message.split('confirms ')[1]?.replace('.', '') : inc.data?.retraction_reason,
+                  officer_note: isConfirmed ? data.log.message.split('confirms ')[1]?.replace('.', '') : inc.data?.officer_note
+                }
+              }
               : inc
           ));
 
           setSelectedIncident(prevSelected => {
             if (prevSelected && prevSelected.id === data.incidentId) {
-              return { 
-                ...prevSelected, 
+              return {
+                ...prevSelected,
                 status: newStatus,
                 data: {
                   ...prevSelected.data,
@@ -197,12 +211,15 @@ function App() {
           });
 
           if (isResolved) {
-            setLivesSaved(prev => prev + Math.floor(Math.random() * 50) + 20);
+            // Use actual affected_population from the Analyst agent if available
+            const impactData = data.log.details?.impact_analysis || data.impact_analysis;
+            const saved = impactData?.affected_population || 120;
+            setLivesSaved(prev => prev + saved);
           }
         }
 
         if (data.log.agent === 'The TruthEngine' || data.log.agent === 'The Truth-Engine') {
-          setIncidents(prevIncidents => prevIncidents.map(inc => 
+          setIncidents(prevIncidents => prevIncidents.map(inc =>
             inc.id === data.incidentId ? { ...inc, status: 'INVESTIGATING' } : inc
           ));
 
@@ -215,13 +232,51 @@ function App() {
         }
       }
       if (data.type === 'COMMUNICATION_ALERT') setLatestAlert(data.data);
+
+      if (data.type === 'RESOLUTION_ALERT') {
+        setResolutionAlert(data);
+        // Update the incident card status immediately
+        const statusMap = {
+          FALSE_ALARM: 'RETRACTED',
+          ROAD_CLEAR: 'RETRACTED',
+          CONFIRMED: 'CONFIRMED',
+          QUEST_ACCEPTED: 'INVESTIGATING',
+        };
+        if (statusMap[data.resolution]) {
+          setIncidents(prev => prev.map(inc =>
+            inc.id === data.incidentId ? { ...inc, status: statusMap[data.resolution] } : inc
+          ));
+        }
+        // Auto-dismiss after 8 seconds
+        setTimeout(() => setResolutionAlert(null), 8000);
+      }
+
+      if (data.type === 'QUEST_ALERT') {
+        // Surface the HITL verification modal
+        setLatestAlert({
+          scope: 'QUEST',
+          radius_km: 0,
+          push_notification: {
+            en: `⚠️ VERIFICATION QUEST: ${data.data?.type?.toUpperCase() || 'CRISIS'} at ${data.data?.location || 'Karachi'}`,
+            ur: `تصدیق ضروری ہے`
+          },
+          whatsapp_draft: {
+            en: data.data?.message || 'Field officer verification required before asset deployment.'
+          },
+          mayor_brief: `Confidence score ${((data.data?.confidence || 0) * 100).toFixed(0)}% — below 80% threshold. Quest dispatched to field officer for ground-truth verification.`
+        });
+        // Update the incident card to show QUEST_ACTIVE status
+        setIncidents(prev => prev.map(inc =>
+          inc.id === data.incidentId ? { ...inc, status: 'QUEST_ACTIVE' } : inc
+        ));
+      }
     };
     setWs(websocket);
     return () => websocket.close();
   }, []);
 
   // Unified Filtering Logic
-  const filteredIncidents = (incidents || []).filter(inc => 
+  const filteredIncidents = (incidents || []).filter(inc =>
     !inc || !inc.department || inc.department === activeDept || inc.support_agency === activeDept
   );
   const filteredTraces = (traces || []).filter(t => {
@@ -249,23 +304,14 @@ function App() {
     } catch (error) { console.error(error); } finally { setIsSimulating(false); }
   };
 
-  const handleLogin = (u) => {
-    localStorage.setItem('muhafiz_user', JSON.stringify(u));
-    setUser(u);
-  };
-  const handleLogout = () => {
-    localStorage.removeItem('muhafiz_user');
-    setUser(null);
-  };
-
-  if (!user) return <SovereignLogin onLogin={handleLogin} />;
+  if (!user) return <SovereignLogin onLogin={setUser} />;
 
   return (
     <div className="h-screen w-screen sovereign-bg overflow-hidden flex flex-col font-sans text-zinc-300">
       {/* 1. MASTER HEADER (Fixed Authority) */}
-      <MetricsUI 
-        activeCrises={filteredIncidents.length} 
-        deptStats={safeDeptStats} 
+      <MetricsUI
+        activeCrises={filteredIncidents.length}
+        deptStats={safeDeptStats}
         livesSaved={livesSaved}
         toggleSidebar={() => setSidebarOpen(!sidebarOpen)}
         activeDept={activeDept}
@@ -274,15 +320,15 @@ function App() {
 
       {/* 2. MAIN OPERATIONAL AREA */}
       <div className="flex-1 flex relative overflow-hidden">
-        
+
         {/* Left: Sovereign Sidebar (Asset Management) */}
-        <div 
+        <div
           className="absolute left-0 top-0 bottom-0 z-40 transition-all duration-500 ease-in-out overflow-visible"
           style={{ width: sidebarOpen ? '288px' : '64px', paddingTop: '56px' }}
         >
-          <SovereignSidebar 
-            activeDept={activeDept} 
-            setDept={setActiveDept} 
+          <SovereignSidebar
+            activeDept={activeDept}
+            setDept={setActiveDept}
             departments={departments}
             view={sidebarView}
             setView={setSidebarView}
@@ -294,28 +340,29 @@ function App() {
             setSidebarOpen={setSidebarOpen}
             selectedIncident={selectedIncident}
             setSelectedIncident={setSelectedIncident}
+            onLogout={() => handleLogin(null)}
           />
         </div>
 
         {/* Center: Tactical Map / Strategic Audit */}
-        <div 
+        <div
           className="flex-1 relative bg-zinc-900 transition-all duration-500"
           style={{ paddingLeft: dashboardView === 'TACTICAL' ? '0px' : (sidebarOpen ? '288px' : '64px') }}
         >
           {dashboardView === 'TACTICAL' ? (
             <div className="w-full h-full relative">
-              <DigitalTwinMap 
-                incidents={filteredIncidents} 
+              <DigitalTwinMap
+                incidents={filteredIncidents}
                 onMarkerClick={(inc) => {
                   setSelectedIncident(inc);
                   setSidebarOpen(true);
                   setSidebarView('dashboard');
-                }} 
+                }}
               />
-              
+
               {/* Tactical Overlays (Map Space Only) */}
-              <div 
-                className="absolute top-6 left-6 z-20 transition-all duration-500" 
+              <div
+                className="absolute top-6 left-6 z-20 transition-all duration-500"
                 style={{ transform: sidebarOpen ? 'translateX(288px)' : 'translateX(64px)' }}
               >
                 <TacticalLegend />
@@ -376,6 +423,38 @@ function App() {
       </div>
 
       <CrisisAlert message={latestAlert} onClose={() => setLatestAlert(null)} />
+
+      {/* Resolution Notification Banner — False Alarm / Road Clear / Confirmed / Officer Dispatched */}
+      {resolutionAlert && (() => {
+        const colorMap = {
+          FALSE_ALARM: { bg: 'from-amber-900/95 to-amber-800/95', border: 'border-amber-500', text: 'text-amber-300', dot: 'bg-amber-400' },
+          ROAD_CLEAR: { bg: 'from-emerald-900/95 to-emerald-800/95', border: 'border-emerald-500', text: 'text-emerald-300', dot: 'bg-emerald-400' },
+          CONFIRMED: { bg: 'from-red-900/95 to-red-800/95', border: 'border-red-500', text: 'text-red-300', dot: 'bg-red-400' },
+          QUEST_ACCEPTED: { bg: 'from-blue-900/95 to-blue-800/95', border: 'border-blue-500', text: 'text-blue-300', dot: 'bg-blue-400' },
+        };
+        const c = colorMap[resolutionAlert.resolution] || colorMap['ROAD_CLEAR'];
+        return (
+          <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[9999] w-[520px] max-w-[95vw] bg-gradient-to-r ${c.bg} border ${c.border} rounded-2xl shadow-2xl p-5 flex gap-4 items-start backdrop-blur-xl animate-in slide-in-from-top-4 duration-300`}>
+            <div className={`w-3 h-3 rounded-full ${c.dot} mt-1 flex-shrink-0 animate-pulse`} />
+            <div className="flex-1">
+              <div className="flex items-center justify-between mb-1">
+                <span className={`text-xs font-black uppercase tracking-widest ${c.text}`}>
+                  {resolutionAlert.label}
+                </span>
+                <span className="text-[10px] text-zinc-500 font-mono">{resolutionAlert.incidentId}</span>
+              </div>
+              <p className="text-sm text-zinc-100 font-medium leading-snug mb-1">{resolutionAlert.message}</p>
+              {resolutionAlert.reason && (
+                <p className="text-[11px] text-zinc-400 italic">Reason: {resolutionAlert.reason}</p>
+              )}
+            </div>
+            <button
+              onClick={() => setResolutionAlert(null)}
+              className="text-zinc-500 hover:text-white transition-colors flex-shrink-0 mt-0.5 text-lg leading-none"
+            >×</button>
+          </div>
+        );
+      })()}
     </div>
   );
 }

@@ -91,9 +91,6 @@ const _runPipeline = async (incidentId, input) => {
 
             if (stateUpdate.assigned_department) assignedDept = stateUpdate.assigned_department;
 
-            // Trust the LangGraph StateGraph channel reducer for classification merging.
-            // (Bug 8 Fix: the old manual merge block here could clobber the graph's
-            //  already-correct merged state with stale data from the outer finalState var)
             finalState = {
                 ...finalState,
                 ...stateUpdate,
@@ -102,32 +99,49 @@ const _runPipeline = async (incidentId, input) => {
             if (stateUpdate?.traceLogs?.length > 0) {
                 const latestLog = stateUpdate.traceLogs[stateUpdate.traceLogs.length - 1];
                 broadcast({ type: 'TRACE_LOG', incidentId, assigned_department: assignedDept, log: latestLog });
+
+                // HITL Quest — halt and surface to frontend for field officer dispatch
+                if (nodeName === 'QuestHalt') {
+                    await updateIncidentState(incidentId, 'QUEST_ACTIVE', finalState);
+                    broadcast({
+                        type: 'QUEST_ALERT',
+                        incidentId,
+                        assigned_department: assignedDept,
+                        data: {
+                            confidence: finalState.classification?.confidence_level,
+                            location: finalState.classification?.location?.landmark,
+                            type: finalState.classification?.type,
+                            message: latestLog.message,
+                        }
+                    });
+                    console.log(`[HITL] Quest emitted for ${incidentId}. Pipeline halted pending field verification.`);
+                }
             }
 
             if (nodeName === 'TheCommunicator' && stateUpdate.communication) {
                 broadcast({ type: 'COMMUNICATION_ALERT', incidentId, assigned_department: assignedDept, data: stateUpdate.communication });
             }
 
-            await updateIncidentState(incidentId, 'PROCESSING', finalState);
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            if (nodeName !== 'QuestHalt') {
+                await updateIncidentState(incidentId, 'PROCESSING', finalState);
+            }
+            await new Promise(resolve => setTimeout(resolve, 200));
         }
 
-        await updateIncidentState(incidentId, 'RESOLVED', finalState);
-
-        if (finalState.deployment) {
+        // Single final status write — RESOLVED is what the frontend checks
+        if (finalState.action_plan?.deployment) {
             await insertTask({
                 task_id: 'TSK-' + Math.random().toString(36).substr(2, 4).toUpperCase(),
                 incident_ref: incidentId,
                 status: 'ON_SCENE',
                 assigned_agent: 'The Dispatcher',
-                // Bug 3 Fix: deployment.logic doesn't exist — the directive lives in action_plan
                 mission_objective: finalState.action_plan?.tactical_directive || 'Urban Emergency Response',
-                priority_level: finalState.triage?.threat_level || finalState.deployment?.threat_level || 5,
+                priority_level: finalState.triage?.threat_level || 5,
             });
             console.log(`[Sovereign] Task Spawned for ${incidentId}`);
         }
 
-        await updateIncidentState(incidentId, 'COMPLETED', finalState);
+        await updateIncidentState(incidentId, 'RESOLVED', finalState);
         console.log(`[Autonomous Logic] Mission ${incidentId} Complete.`);
         return { success: true };
     } catch (error) {

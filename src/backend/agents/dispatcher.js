@@ -30,11 +30,27 @@ export const dispatcher = async (state) => {
 
     // Intelligent Dynamic Fallback
     const inputLower = (signal?.raw_input || "").toLowerCase();
-    const fallbackDept = inputLower.includes("aag") || inputLower.includes("fire") || inputLower.includes("jal")
-        ? "FIRE_BRIGADE"
-        : (inputLower.includes("pani") || inputLower.includes("doob") || inputLower.includes("flood") || inputLower.includes("water") || inputLower.includes("rain") ? "KMC_HEALTH" : "RESCUE_1122");
-    const fallbackCategory = fallbackDept === "KMC_HEALTH" ? "INFRASTRUCTURE" : "LIFE_SAFETY";
-    const fallbackThreat = fallbackDept === "FIRE_BRIGADE" ? 8 : (fallbackDept === "KMC_HEALTH" ? 7 : 5);
+    
+    let fallbackDept = "RESCUE_1122";
+    let fallbackCategory = "LIFE_SAFETY";
+    let fallbackThreat = 5;
+
+    if (inputLower.includes("aag") || inputLower.includes("fire") || inputLower.includes("jal")) {
+        fallbackDept = "FIRE_BRIGADE";
+        fallbackThreat = 8;
+    } else if (inputLower.includes("blast") || inputLower.includes("dhamaka") || inputLower.includes("explosion") || inputLower.includes("bomb")) {
+        fallbackDept = "RESCUE_1122";
+        fallbackCategory = "LIFE_SAFETY";
+        fallbackThreat = 10;
+    } else if (inputLower.includes("protest") || inputLower.includes("dharna") || inputLower.includes("strike") || inputLower.includes("rally")) {
+        fallbackDept = "POLICE_FORCE";
+        fallbackCategory = "CIVIL_ORDER";
+        fallbackThreat = 6;
+    } else if (inputLower.includes("pani") || inputLower.includes("doob") || inputLower.includes("flood") || inputLower.includes("water") || inputLower.includes("rain")) {
+        fallbackDept = "KMC_HEALTH";
+        fallbackCategory = "INFRASTRUCTURE";
+        fallbackThreat = 7;
+    }
     
     const defaultFallback = {
         "threat_level": fallbackThreat,

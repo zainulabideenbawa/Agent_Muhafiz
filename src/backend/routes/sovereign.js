@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { getUrbanOptimization, deployHub, insertMaintenanceTask, saveIncident } from '../db/index.js';
-import { setUserDirective, runSovereignLogic } from '../sovereign_logic.js';
+import { setUserDirective } from '../sovereign_logic.js';
 
 const router = Router();
 
@@ -11,9 +11,7 @@ router.post('/report', async (req, res) => {
         console.log(`[Sovereign] Citizen Report Received: "${signal}" (ID: ${incidentId})`);
         
         await saveIncident(incidentId, 'UNKNOWN', 'ANALYZING', signal);
-        
-        // Start autonomous logic in the background
-        runSovereignLogic(incidentId, signal);
+        // Worker picks this up automatically via 3s poll
         
         res.json({ success: true, incidentId });
     } catch (e) {
