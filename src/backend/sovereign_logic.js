@@ -91,25 +91,12 @@ const _runPipeline = async (incidentId, input) => {
 
             if (stateUpdate.assigned_department) assignedDept = stateUpdate.assigned_department;
 
-            // Deep-merge classification so location.landmark is never clobbered by a
-            // downstream agent returning a flat classification object.
-            const mergedClassification = (finalState.classification || stateUpdate.classification)
-                ? {
-                    ...(finalState.classification || {}),
-                    ...(stateUpdate.classification || {}),
-                    location: (
-                        stateUpdate.classification?.location &&
-                        typeof stateUpdate.classification.location === 'object'
-                    )
-                        ? stateUpdate.classification.location
-                        : (finalState.classification?.location || { landmark: 'Karachi' })
-                }
-                : finalState.classification;
-
+            // Trust the LangGraph StateGraph channel reducer for classification merging.
+            // (Bug 8 Fix: the old manual merge block here could clobber the graph's
+            //  already-correct merged state with stale data from the outer finalState var)
             finalState = {
                 ...finalState,
                 ...stateUpdate,
-                classification: mergedClassification,
             };
 
             if (stateUpdate?.traceLogs?.length > 0) {
@@ -133,8 +120,9 @@ const _runPipeline = async (incidentId, input) => {
                 incident_ref: incidentId,
                 status: 'ON_SCENE',
                 assigned_agent: 'The Dispatcher',
-                mission_objective: finalState.deployment.logic || 'Urban Emergency Response',
-                priority_level: finalState.deployment.threat_level || 5,
+                // Bug 3 Fix: deployment.logic doesn't exist — the directive lives in action_plan
+                mission_objective: finalState.action_plan?.tactical_directive || 'Urban Emergency Response',
+                priority_level: finalState.triage?.threat_level || finalState.deployment?.threat_level || 5,
             });
             console.log(`[Sovereign] Task Spawned for ${incidentId}`);
         }

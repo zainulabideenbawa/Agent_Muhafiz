@@ -6,13 +6,23 @@ const router = Router();
 router.post('/login', async (req, res) => {
     const { email, password } = req.body;
 
-    const user = await findCommanderByEmail(email);
-    console.log(user);
-    if (user) return res.json({ success: true, user });
+    if (!email || !password) {
+        return res.status(400).json({ success: false, message: 'Email and password are required' });
+    }
 
+    // Check hardcoded SUPER_ADMIN first (has its own password)
     if (email === 'admin@muhafiz.gov' && password === 'sovereign') {
         return res.json({ success: true, user: { role: 'SUPER_ADMIN', name: 'Sovereign Architect', email } });
     }
+
+    // Bug 4 Fix: validate that the user exists AND password matches before granting access
+    // Commander mock profiles use 'muhafiz' as default password
+    const COMMANDER_DEFAULT_PASSWORD = 'muhafiz';
+    const user = await findCommanderByEmail(email);
+    if (user && password === COMMANDER_DEFAULT_PASSWORD) {
+        return res.json({ success: true, user });
+    }
+
     res.status(401).json({ success: false, message: 'Invalid Credentials' });
 });
 
