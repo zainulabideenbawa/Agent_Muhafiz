@@ -91,7 +91,15 @@ const MissionDashboard = () => {
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <Clock size={12} className="text-zinc-500" />
-                                    <span className="text-[10px] text-zinc-400 font-medium">Duration: <span className="text-zinc-100">14m 22s</span></span>
+                                    <span className="text-[10px] text-zinc-400 font-medium">Duration: <span className="text-zinc-100">{
+                                        (() => {
+                                            if (!task.created_at) return 'Ongoing';
+                                            const secs = Math.floor((Date.now() - new Date(task.created_at).getTime()) / 1000);
+                                            const m = Math.floor(secs / 60);
+                                            const s = secs % 60;
+                                            return m > 0 ? `${m}m ${s}s` : `${s}s`;
+                                        })()
+                                    }</span></span>
                                 </div>
                             </div>
                         </div>

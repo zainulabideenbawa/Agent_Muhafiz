@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Truck, Users, LayoutDashboard, Settings, User, Save, Plus, MapPin, Trash2, Terminal, Send, TrendingUp, Megaphone, ClipboardList, Cpu, Search, ChevronRight } from 'lucide-react';
+import { Shield, Truck, Users, LayoutDashboard, Settings, User, Save, Plus, MapPin, Trash2, Terminal, Send, TrendingUp, Megaphone, ClipboardList, Cpu, Search, ChevronRight, LogOut } from 'lucide-react';
 
-const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, setDashboardView, user, sidebarOpen, setSidebarOpen, selectedIncident, setSelectedIncident }) => {
+const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, setDashboardView, user, sidebarOpen, setSidebarOpen, selectedIncident, setSelectedIncident, onLogout }) => {
     const [hubs, setHubs] = useState([]);
     const [isSaving, setIsSaving] = useState(false);
 
@@ -210,15 +210,29 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
                 </div>
 
                 {/* Bottom Toggle to Open */}
-                <div className="relative group">
-                    <button 
-                        onClick={() => setSidebarOpen(true)}
-                        className="w-10 h-10 rounded-xl flex items-center justify-center text-zinc-500 hover:bg-white/5 hover:text-white transition-all border border-transparent hover:border-white/5"
-                    >
-                        <ChevronRight size={16} />
-                    </button>
-                    <div className="absolute left-14 top-1/2 -translate-y-1/2 ml-2 px-3 py-1.5 rounded-lg bg-zinc-950/95 border border-white/10 text-white text-[9px] font-black tracking-widest uppercase pointer-events-none opacity-0 scale-95 origin-left group-hover:opacity-100 group-hover:scale-100 transition-all duration-300 backdrop-blur-md shadow-2xl whitespace-nowrap z-[100]">
-                        Expand Menu
+                <div className="flex flex-col gap-2 items-center mb-4">
+                    <div className="relative group">
+                        <button 
+                            onClick={onLogout}
+                            className="w-10 h-10 rounded-xl flex items-center justify-center text-red-500/70 hover:text-red-400 hover:bg-red-500/10 transition-all border border-transparent hover:border-red-500/20"
+                        >
+                            <LogOut size={16} />
+                        </button>
+                        <div className="absolute left-14 top-1/2 -translate-y-1/2 ml-2 px-3 py-1.5 rounded-lg bg-zinc-950/95 border border-red-500/20 text-red-400 text-[9px] font-black tracking-widest uppercase pointer-events-none opacity-0 scale-95 origin-left group-hover:opacity-100 group-hover:scale-100 transition-all duration-300 backdrop-blur-md shadow-2xl whitespace-nowrap z-[100]">
+                            Sign Out
+                        </div>
+                    </div>
+
+                    <div className="relative group">
+                        <button 
+                            onClick={() => setSidebarOpen(true)}
+                            className="w-10 h-10 rounded-xl flex items-center justify-center text-zinc-500 hover:bg-white/5 hover:text-white transition-all border border-transparent hover:border-white/5"
+                        >
+                            <ChevronRight size={16} />
+                        </button>
+                        <div className="absolute left-14 top-1/2 -translate-y-1/2 ml-2 px-3 py-1.5 rounded-lg bg-zinc-950/95 border border-white/10 text-white text-[9px] font-black tracking-widest uppercase pointer-events-none opacity-0 scale-95 origin-left group-hover:opacity-100 group-hover:scale-100 transition-all duration-300 backdrop-blur-md shadow-2xl whitespace-nowrap z-[100]">
+                            Expand Menu
+                        </div>
                     </div>
                 </div>
             </div>
@@ -557,18 +571,41 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
                 </div>
             )}
 
-            {/* Profile Switcher (Simulated) */}
-            <div className="p-4 bg-black/40 border-t border-zinc-800">
-                 <select 
-                    disabled={user.role === 'DEPT_ADMIN'}
-                    value={activeDept}
-                    onChange={(e) => setDept(e.target.value)}
-                    className="w-full bg-zinc-900 border border-zinc-800 text-[9px] text-zinc-500 font-bold p-2 rounded-lg outline-none uppercase tracking-tighter disabled:opacity-50"
-                 >
-                    {Object.keys(departments).map(id => (
-                        <option key={id} value={id}>{departments[id].name}</option>
-                    ))}
-                 </select>
+            {/* Profile & Switcher Section */}
+            <div className="p-4 bg-black/40 border-t border-zinc-800 space-y-4">
+                 <div className="flex flex-col gap-1">
+                     <span className="text-[7px] font-black text-zinc-600 uppercase tracking-widest">Active Agency</span>
+                     <select 
+                        disabled={user.role === 'DEPT_ADMIN'}
+                        value={activeDept}
+                        onChange={(e) => setDept(e.target.value)}
+                        className="w-full bg-zinc-900 border border-zinc-800 text-[9px] text-zinc-500 font-bold p-2 rounded-lg outline-none uppercase tracking-tighter disabled:opacity-50"
+                     >
+                        {Object.keys(departments).map(id => (
+                            <option key={id} value={id}>{departments[id].name}</option>
+                        ))}
+                     </select>
+                 </div>
+
+                 {/* Profile Details & Sign Out */}
+                 <div className="flex items-center justify-between p-3 rounded-2xl bg-zinc-950/40 border border-white/5 backdrop-blur-md animate-in fade-in duration-300">
+                     <div className="flex items-center gap-2.5 min-w-0">
+                         <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 shrink-0">
+                             <User size={14} />
+                         </div>
+                         <div className="min-w-0">
+                             <h5 className="text-[10px] font-bold text-white leading-none mb-0.5 truncate">{user.name}</h5>
+                             <span className="text-[7px] font-mono text-zinc-500 uppercase tracking-wider">{user.role}</span>
+                         </div>
+                     </div>
+                     <button 
+                         onClick={onLogout}
+                         className="p-2 bg-red-950/20 hover:bg-red-500/10 border border-red-500/10 hover:border-red-500/30 text-red-400 hover:text-red-300 rounded-xl transition-all shadow-lg shadow-red-950/20 shrink-0"
+                         title="Sign Out of Sovereign Command"
+                     >
+                         <LogOut size={12} />
+                     </button>
+                 </div>
             </div>
         </div>
     );

@@ -22,6 +22,41 @@ const crisisStateSchema = {
     traceLogs: { value: (prev, curr) => prev.concat(curr), default: () => [] }
 };
 
+/**
+ * HITL Halt Node — triggered when TruthEngine confidence < 0.8.
+ * Sets status to QUEST_ACTIVE and surfaces a field verification alert
+ * instead of blindly deploying assets on an unverified signal.
+ */
+const questHalt = async (state) => {
+    const loc = state.classification?.location?.landmark || 'Karachi';
+    const type = state.classification?.type || 'Unknown';
+    const confidence = state.classification?.confidence_level ?? 0;
+    const pct = (confidence * 100).toFixed(0);
+
+    console.warn(`[HITL] Confidence ${pct}% < 80% threshold. Halting pipeline. Quest emitted for ${type} at ${loc}.`);
+
+    const log = {
+        timestamp: new Date().toISOString(),
+        agent: "The Truth-Engine",
+        message: `⚠️ VERIFICATION QUEST: ${type.toUpperCase()} at ${loc} — Confidence ${pct}% below 80% threshold. Awaiting field officer ground-truth before asset deployment.`,
+        outcome: "Quest Active",
+        details: {
+            confidence_level: confidence,
+            location: loc,
+            type,
+            quest_reason: `Telemetry confidence score of ${pct}% is insufficient to authorise autonomous deployment. Human-in-the-loop verification required.`
+        }
+    };
+
+    return { traceLogs: [log] };
+};
+
+/** Conditional router: high-confidence → full pipeline, low-confidence → HITL quest */
+const routeAfterTruthEngine = (state) => {
+    const confidence = state.classification?.confidence_level ?? 1.0;
+    return confidence >= 0.8 ? "TheAnalyst" : "QuestHalt";
+};
+
 const workflow = new StateGraph({ channels: crisisStateSchema });
 
 workflow.addNode("TheDispatcher", dispatcher);
@@ -32,15 +67,23 @@ workflow.addNode("TheStrategist", strategist);
 workflow.addNode("TheOracle", oracle);
 workflow.addNode("TheCommunicator", communicator);
 workflow.addNode("TheAuditor", auditor);
+workflow.addNode("QuestHalt", questHalt);
 
 workflow.addEdge(START, "TheDispatcher");
 workflow.addEdge("TheDispatcher", "TheSentinel");
 workflow.addEdge("TheSentinel", "TheTruthEngine");
-workflow.addEdge("TheTruthEngine", "TheAnalyst");
+
+// HITL conditional branch after verification
+workflow.addConditionalEdges("TheTruthEngine", routeAfterTruthEngine, {
+    "TheAnalyst": "TheAnalyst",
+    "QuestHalt": "QuestHalt"
+});
+
 workflow.addEdge("TheAnalyst", "TheStrategist");
 workflow.addEdge("TheStrategist", "TheOracle");
 workflow.addEdge("TheOracle", "TheCommunicator");
 workflow.addEdge("TheCommunicator", "TheAuditor");
 workflow.addEdge("TheAuditor", END);
+workflow.addEdge("QuestHalt", END);
 
 export const muhafizGraph = workflow.compile();

@@ -143,11 +143,15 @@ const IncidentTrack = ({ incident, formatTime }) => {
                     <div className="grid grid-cols-2 gap-2 p-2 bg-black/40 rounded-lg border border-white/5">
                         <div>
                             <p className="text-[7px] text-zinc-500 uppercase font-black">Resolution Score</p>
-                            <p className="text-[10px] text-emerald-500 font-mono">98.4%</p>
+                            <p className="text-[10px] text-emerald-500 font-mono">
+                                {incident.logs.find(l => l.agent === 'The Auditor')?.details?.performance_score ?? 88}%
+                            </p>
                         </div>
                         <div>
                             <p className="text-[7px] text-zinc-500 uppercase font-black">Audit Status</p>
-                            <p className="text-[10px] text-zinc-300 font-mono">Verified</p>
+                            <p className="text-[10px] text-zinc-300 font-mono">
+                                {incident.logs.find(l => l.agent === 'The Auditor')?.details?.status ?? 'Verified'}
+                            </p>
                         </div>
                     </div>
                     {latestLog.policy_recommendation && (

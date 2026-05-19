@@ -7,6 +7,7 @@ dotenv.config();
 export const flashModel = new ChatGoogleGenerativeAI({
     model: "gemini-2.5-flash",
     apiKey: process.env.GOOGLE_API_KEY,
+    maxRetries: 0,
 });
 
 // Bug 6 Fix: Analyst, TruthEngine, Oracle, Strategist need deeper reasoning
@@ -14,4 +15,5 @@ export const flashModel = new ChatGoogleGenerativeAI({
 export const proModel = new ChatGoogleGenerativeAI({
     model: "gemini-2.5-pro",
     apiKey: process.env.GOOGLE_API_KEY,
+    maxRetries: 0,
 });

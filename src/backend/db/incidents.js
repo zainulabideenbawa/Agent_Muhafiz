@@ -2,17 +2,45 @@ import { eq, asc } from 'drizzle-orm';
 import { db } from './connection.js';
 import { incidents } from './schema.js';
 
-let localIncidents = [
-    {
-        incident_id: 'MHFZ-9021',
-        type: 'URBAN_FLOOD',
-        location: 'NIPA Chowrangi',
-        status: 'ANALYZING',
-        description: 'NIPA doob gaya!',
-        data: { raw_input: 'NIPA doob gaya!' },
-        created_at: new Date(Date.now() - 5 * 60 * 1000).toISOString()
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const STORE_FILE = path.join(__dirname, 'local_store.json');
+
+const loadLocalIncidents = () => {
+    try {
+        if (fs.existsSync(STORE_FILE)) {
+            const fileData = fs.readFileSync(STORE_FILE, 'utf8');
+            return JSON.parse(fileData);
+        }
+    } catch (e) {
+        console.error("[Local Store] Failed to load local_store.json:", e);
     }
-];
+    return [
+        {
+            incident_id: 'MHFZ-9021',
+            type: 'URBAN_FLOOD',
+            location: 'NIPA Chowrangi',
+            status: 'ANALYZING',
+            description: 'NIPA doob gaya!',
+            data: { raw_input: 'NIPA doob gaya!' },
+            created_at: new Date(Date.now() - 5 * 60 * 1000).toISOString()
+        }
+    ];
+};
+
+const persistLocalIncidents = () => {
+    try {
+        fs.writeFileSync(STORE_FILE, JSON.stringify(localIncidents, null, 2), 'utf8');
+    } catch (e) {
+        console.error("[Local Store] Failed to write local_store.json:", e);
+    }
+};
+
+let localIncidents = loadLocalIncidents();
 
 export const saveIncident = async (incidentId, type, location, rawInput) => {
     const newIncident = {
@@ -35,12 +63,14 @@ export const saveIncident = async (incidentId, type, location, rawInput) => {
                 data: { raw_input: rawInput },
             }).returning();
             localIncidents.unshift(newIncident);
+            persistLocalIncidents();
             return result;
         } catch (e) {
             console.error("DB saveIncident Failed, using local cache:", e);
         }
     }
     localIncidents.unshift(newIncident);
+    persistLocalIncidents();
     return [newIncident];
 };
 
@@ -82,8 +112,16 @@ export const updateIncidentState = async (incidentId, status, data) => {
 
     if (db) {
         try {
+            const updateFields = { status, data: mergedData, last_agent: lastAgent };
+            if (mergedData.classification?.location?.landmark) {
+                updateFields.location = mergedData.classification.location.landmark;
+            }
+            if (mergedData.classification?.type && mergedData.classification.type !== 'UNKNOWN') {
+                updateFields.type = mergedData.classification.type.toUpperCase();
+            }
+
             const result = await db.update(incidents)
-                .set({ status, data: mergedData, last_agent: lastAgent })
+                .set(updateFields)
                 .where(eq(incidents.incident_id, incidentId))
                 .returning();
             
@@ -92,20 +130,28 @@ export const updateIncidentState = async (incidentId, status, data) => {
                     ...localIncidents[existingIndex],
                     status,
                     data: mergedData,
-                    last_agent: lastAgent
+                    last_agent: lastAgent,
+                    location: updateFields.location || localIncidents[existingIndex].location,
+                    type: updateFields.type || localIncidents[existingIndex].type
                 };
+                persistLocalIncidents();
             }
             return result;
         } catch (e) { console.error("DB updateIncidentState Failed:", e); }
     }
 
     if (existingIndex !== -1) {
+        const landmark = mergedData.classification?.location?.landmark;
+        const typeVal = mergedData.classification?.type;
         localIncidents[existingIndex] = {
             ...localIncidents[existingIndex],
             status,
             data: mergedData,
-            last_agent: lastAgent
+            last_agent: lastAgent,
+            location: landmark || localIncidents[existingIndex].location,
+            type: typeVal ? typeVal.toUpperCase() : localIncidents[existingIndex].type
         };
+        persistLocalIncidents();
         return [localIncidents[existingIndex]];
     }
 };

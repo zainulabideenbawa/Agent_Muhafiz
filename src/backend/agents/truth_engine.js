@@ -1,6 +1,7 @@
 import { proModel } from './models.js';
 import { safeParseJson } from './parser.js';
-import { get_city_vitals } from '../tools.js';
+import { get_city_vitals, check_nasa_firms_fire } from '../tools.js';
+import { verifyCrisisFromTwitter } from '../social_uplink.js';
 
 export const truthEngine = async (state) => {
     // Safely extract landmark — location may be string or { landmark } object
@@ -19,11 +20,45 @@ export const truthEngine = async (state) => {
     // Dynamic Intelligent Validation Heuristics
     const crisisType = (state.classification?.type || "").toLowerCase();
     const isFire = crisisType.includes("fire");
+    const isMajorCrisis = ["flood", "blast", "protest", "fire"].includes(crisisType);
+
     let verifiedVerdict = "Verified";
     let calculatedConfidence = 0.85;
     let fallbackReason = `Heuristic telemetry validation confirmed normal thresholds for ${landmark}.`;
+    let additionalSources = ["City Telemetry Grid", "Sensors Hub"];
 
-    if (isFire) {
+    if (isMajorCrisis) {
+        // Perform reactive Twitter OSINT Verification
+        const osintResult = await verifyCrisisFromTwitter(crisisType, landmark);
+        
+        if (osintResult.verified && osintResult.posts.length > 0) {
+            calculatedConfidence = 0.98;
+            additionalSources.push("Twitter OSINT Verification");
+            
+            const leadPost = osintResult.posts[0];
+            fallbackReason = `Telemetry matched risk profile. Reconfirmed from Twitter: User ${leadPost.username} has also posted this related with hashtag ${leadPost.hashtag}. Post: "${leadPost.text}"`;
+        } else {
+            calculatedConfidence = 0.75;
+            fallbackReason = `Major crisis detected, but could not be verified on social channels. Local sensors nominal.`;
+        }
+
+        // For fire crises: additionally cross-reference with NASA FIRMS satellite imagery
+        if (isFire) {
+            const coords = state.classification?.location;
+            const lat = coords?.lat || 24.8607;
+            const lng = coords?.lng || 67.0011;
+            const firmsResult = await check_nasa_firms_fire(lat, lng);
+            if (firmsResult.satellite_confirmed) {
+                calculatedConfidence = Math.min(0.99, calculatedConfidence + 0.05);
+                additionalSources.push(`NASA VIIRS Satellite (${firmsResult.fire_pixels} active pixel(s))`);
+                fallbackReason += ` NASA FIRMS satellite data confirms ${firmsResult.fire_pixels} active fire pixel(s) detected in the incident zone.`;
+                console.log(`[Truth-Engine/NASA] 🛰️ Satellite CONFIRMED fire at (${lat}, ${lng}) — ${firmsResult.fire_pixels} pixel(s)`);
+            } else {
+                console.log(`[Truth-Engine/NASA] 🛰️ Satellite: no active fire pixels detected (may be clouded or small fire).`);
+                additionalSources.push("NASA VIIRS Satellite (no pixels — possible small/indoor fire)");
+            }
+        }
+    } else if (isFire) {
         if (vitals.avg_temp > 35) {
             calculatedConfidence = 0.95;
             fallbackReason = `High ambient temperature (${vitals.avg_temp}°C) telemetry matches risk profile for Fire crisis.`;
@@ -42,7 +77,7 @@ export const truthEngine = async (state) => {
     }
 
     const defaultFallback = {
-        classification: { confidence_level: calculatedConfidence, verification_sources: ["City Telemetry Grid", "Sensors Hub"] },
+        classification: { confidence_level: calculatedConfidence, verification_sources: additionalSources },
         verdict: verifiedVerdict,
         reasoning: fallbackReason
     };

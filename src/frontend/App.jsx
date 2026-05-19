@@ -38,7 +38,23 @@ const resolveHotspotCoordinates = (locationName) => {
 };
 
 function App() {
-  const [user, setUser] = useState(null); // AUTH STATE
+  const [user, setUser] = useState(() => {
+    try {
+      const stored = localStorage.getItem('muhafiz_user');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const handleLogin = (newUser) => {
+    setUser(newUser);
+    if (newUser) {
+      localStorage.setItem('muhafiz_user', JSON.stringify(newUser));
+    } else {
+      localStorage.removeItem('muhafiz_user');
+    }
+  };
   const [traces, setTraces] = useState([]);
   const [isSimulating, setIsSimulating] = useState(false);
   const [ws, setWs] = useState(null);
@@ -53,6 +69,7 @@ function App() {
   const [livesSaved, setLivesSaved] = useState(0);
   const [incidents, setIncidents] = useState([]);
   const [selectedIncident, setSelectedIncident] = useState(null);
+  const [resolutionAlert, setResolutionAlert] = useState(null); // for False Alarm / Road Clear / Confirmed banners
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -80,10 +97,20 @@ function App() {
         if (Array.isArray(dbIncidents)) {
           const mappedIncidents = dbIncidents.map(inc => {
             const landmarkName = inc.location || 'NIPA Chowrangi';
-            const coords = resolveHotspotCoordinates(landmarkName);
+            // Prioritize coordinates geocoded by Google Maps in the backend
+            const hasBackendCoords = inc.data?.classification?.location?.lat && inc.data?.classification?.location?.lng;
+            const coords = hasBackendCoords
+              ? { lng: inc.data.classification.location.lng, lat: inc.data.classification.location.lat }
+              : resolveHotspotCoordinates(landmarkName);
+
+            let dept = 'KMC_HEALTH';
+            if (inc.type === 'FIRE' || inc.type === 'FIRE_BRIGADE') dept = 'FIRE_BRIGADE';
+            else if (inc.type === 'POLICE_FORCE') dept = 'POLICE_FORCE';
+            else if (inc.type === 'RESCUE_1122') dept = 'RESCUE_1122';
+
             return {
               id: inc.incident_id,
-              department: inc.type === 'FIRE' ? 'FIRE_BRIGADE' : 'KMC_HEALTH',
+              department: dept,
               type: inc.type?.toLowerCase() || 'urban_flood',
               location: { 
                 landmark: landmarkName,
@@ -143,8 +170,13 @@ function App() {
         }]);
 
         if (data.log.agent === 'The Sentinel' && data.log.outcome === 'Success') {
-          const landmarkName = data.log.message.split('at ')[1]?.replace('.', '') || 'NIPA Chowrangi';
-          const coords = resolveHotspotCoordinates(landmarkName);
+          const sentinelLoc = data.log.details?.location;
+          const landmarkName = sentinelLoc?.landmark || data.log.message.split('at ')[1]?.replace('.', '') || 'NIPA Chowrangi';
+          const hasBackendCoords = sentinelLoc?.lat && sentinelLoc?.lng;
+          const coords = hasBackendCoords
+            ? { lng: sentinelLoc.lng, lat: sentinelLoc.lat }
+            : resolveHotspotCoordinates(landmarkName);
+
           setIncidents(prev => [...prev, {
             id: data.incidentId,
             department: data.assigned_department,
@@ -195,7 +227,10 @@ function App() {
           });
 
           if (isResolved) {
-            setLivesSaved(prev => prev + Math.floor(Math.random() * 50) + 20);
+            // Use actual affected_population from the Analyst agent if available
+            const impactData = data.log.details?.impact_analysis || data.impact_analysis;
+            const saved = impactData?.affected_population || 120;
+            setLivesSaved(prev => prev + saved);
           }
         }
 
@@ -213,6 +248,44 @@ function App() {
         }
       }
       if (data.type === 'COMMUNICATION_ALERT') setLatestAlert(data.data);
+
+      if (data.type === 'RESOLUTION_ALERT') {
+        setResolutionAlert(data);
+        // Update the incident card status immediately
+        const statusMap = {
+          FALSE_ALARM: 'RETRACTED',
+          ROAD_CLEAR: 'RETRACTED',
+          CONFIRMED: 'CONFIRMED',
+          QUEST_ACCEPTED: 'INVESTIGATING',
+        };
+        if (statusMap[data.resolution]) {
+          setIncidents(prev => prev.map(inc =>
+            inc.id === data.incidentId ? { ...inc, status: statusMap[data.resolution] } : inc
+          ));
+        }
+        // Auto-dismiss after 8 seconds
+        setTimeout(() => setResolutionAlert(null), 8000);
+      }
+
+      if (data.type === 'QUEST_ALERT') {
+        // Surface the HITL verification modal
+        setLatestAlert({
+          scope: 'QUEST',
+          radius_km: 0,
+          push_notification: {
+            en: `⚠️ VERIFICATION QUEST: ${data.data?.type?.toUpperCase() || 'CRISIS'} at ${data.data?.location || 'Karachi'}`,
+            ur: `تصدیق ضروری ہے`
+          },
+          whatsapp_draft: {
+            en: data.data?.message || 'Field officer verification required before asset deployment.'
+          },
+          mayor_brief: `Confidence score ${((data.data?.confidence || 0) * 100).toFixed(0)}% — below 80% threshold. Quest dispatched to field officer for ground-truth verification.`
+        });
+        // Update the incident card to show QUEST_ACTIVE status
+        setIncidents(prev => prev.map(inc =>
+          inc.id === data.incidentId ? { ...inc, status: 'QUEST_ACTIVE' } : inc
+        ));
+      }
     };
     setWs(websocket);
     return () => websocket.close();
@@ -247,7 +320,7 @@ function App() {
     } catch (error) { console.error(error); } finally { setIsSimulating(false); }
   };
 
-  if (!user) return <SovereignLogin onLogin={setUser} />;
+  if (!user) return <SovereignLogin onLogin={handleLogin} />;
 
   return (
     <div className="h-screen w-screen sovereign-bg overflow-hidden flex flex-col font-sans text-zinc-300">
@@ -282,6 +355,7 @@ function App() {
             setSidebarOpen={setSidebarOpen}
             selectedIncident={selectedIncident}
             setSelectedIncident={setSelectedIncident}
+            onLogout={() => handleLogin(null)}
           />
         </div>
 
@@ -364,6 +438,38 @@ function App() {
       </div>
 
       <CrisisAlert message={latestAlert} onClose={() => setLatestAlert(null)} />
+
+      {/* Resolution Notification Banner — False Alarm / Road Clear / Confirmed / Officer Dispatched */}
+      {resolutionAlert && (() => {
+        const colorMap = {
+          FALSE_ALARM:     { bg: 'from-amber-900/95 to-amber-800/95', border: 'border-amber-500', text: 'text-amber-300', dot: 'bg-amber-400' },
+          ROAD_CLEAR:      { bg: 'from-emerald-900/95 to-emerald-800/95', border: 'border-emerald-500', text: 'text-emerald-300', dot: 'bg-emerald-400' },
+          CONFIRMED:       { bg: 'from-red-900/95 to-red-800/95', border: 'border-red-500', text: 'text-red-300', dot: 'bg-red-400' },
+          QUEST_ACCEPTED:  { bg: 'from-blue-900/95 to-blue-800/95', border: 'border-blue-500', text: 'text-blue-300', dot: 'bg-blue-400' },
+        };
+        const c = colorMap[resolutionAlert.resolution] || colorMap['ROAD_CLEAR'];
+        return (
+          <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-[9999] w-[520px] max-w-[95vw] bg-gradient-to-r ${c.bg} border ${c.border} rounded-2xl shadow-2xl p-5 flex gap-4 items-start backdrop-blur-xl animate-in slide-in-from-top-4 duration-300`}>
+            <div className={`w-3 h-3 rounded-full ${c.dot} mt-1 flex-shrink-0 animate-pulse`} />
+            <div className="flex-1">
+              <div className="flex items-center justify-between mb-1">
+                <span className={`text-xs font-black uppercase tracking-widest ${c.text}`}>
+                  {resolutionAlert.label}
+                </span>
+                <span className="text-[10px] text-zinc-500 font-mono">{resolutionAlert.incidentId}</span>
+              </div>
+              <p className="text-sm text-zinc-100 font-medium leading-snug mb-1">{resolutionAlert.message}</p>
+              {resolutionAlert.reason && (
+                <p className="text-[11px] text-zinc-400 italic">Reason: {resolutionAlert.reason}</p>
+              )}
+            </div>
+            <button
+              onClick={() => setResolutionAlert(null)}
+              className="text-zinc-500 hover:text-white transition-colors flex-shrink-0 mt-0.5 text-lg leading-none"
+            >×</button>
+          </div>
+        );
+      })()}
     </div>
   );
 }
