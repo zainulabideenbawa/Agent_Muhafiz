@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Truck, Users, LayoutDashboard, Settings, User, Save, Plus, MapPin, Trash2, Terminal, Send, TrendingUp, Megaphone, ClipboardList, Cpu, Search, ChevronRight } from 'lucide-react';
+import { Shield, Truck, Users, LayoutDashboard, Settings, User, Save, Plus, MapPin, Trash2, Terminal, Send, TrendingUp, Megaphone, ClipboardList, Cpu, Search, ChevronRight, LogOut } from 'lucide-react';
 
-const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, setDashboardView, user, sidebarOpen, setSidebarOpen, selectedIncident, setSelectedIncident }) => {
+const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, setDashboardView, user, onLogout, sidebarOpen, setSidebarOpen, selectedIncident, setSelectedIncident }) => {
     const [hubs, setHubs] = useState([]);
     const [isSaving, setIsSaving] = useState(false);
 
@@ -557,9 +557,9 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
                 </div>
             )}
 
-            {/* Profile Switcher (Simulated) */}
-            <div className="p-4 bg-black/40 border-t border-zinc-800">
-                 <select 
+            {/* Profile Switcher + Logout */}
+            <div className="p-4 bg-black/40 border-t border-zinc-800 space-y-2">
+                 <select
                     disabled={user.role === 'DEPT_ADMIN'}
                     value={activeDept}
                     onChange={(e) => setDept(e.target.value)}
@@ -569,6 +569,23 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
                         <option key={id} value={id}>{departments[id].name}</option>
                     ))}
                  </select>
+                 {sidebarOpen && (
+                    <div className="flex items-center justify-between pt-1">
+                        <div className="flex items-center gap-2 min-w-0">
+                            <div className="w-6 h-6 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center flex-shrink-0">
+                                <User size={10} className="text-emerald-400" />
+                            </div>
+                            <span className="text-[9px] text-zinc-400 font-mono truncate">{user?.email || user?.name || 'Commander'}</span>
+                        </div>
+                        <button
+                            onClick={onLogout}
+                            title="Sign Out"
+                            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                        >
+                            <LogOut size={11} /> OUT
+                        </button>
+                    </div>
+                 )}
             </div>
         </div>
     );

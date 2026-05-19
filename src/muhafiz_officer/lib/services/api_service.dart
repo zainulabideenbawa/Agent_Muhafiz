@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  static const String _macLanIp = '192.168.18.56';
+  static const String _macLanIp = '192.168.18.4';
   static final String _host = Platform.isAndroid ? '10.0.2.2' : _macLanIp;
   static final String baseUrl = 'http://$_host:3001/api';
   static String get wsUrl => 'ws://$_host:3001';
@@ -50,7 +50,11 @@ class ApiService {
     throw HttpException('Server returned ${response.statusCode}');
   }
 
-  static Future<void> updateTaskStatus(String taskId, String status, String summary) async {
+  static Future<void> updateTaskStatus(
+    String taskId,
+    String status,
+    String summary,
+  ) async {
     final response = await http
         .post(
           Uri.parse('$baseUrl/tasks/$taskId/status'),
@@ -64,13 +68,17 @@ class ApiService {
   }
 
   static Future<void> confirmCrisis(String incidentId, String note) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/incidents/confirm-crisis'),
-      headers: {'Content-Type': 'application/json'},
-      body: json.encode({'incidentId': incidentId, 'note': note}),
-    ).timeout(const Duration(seconds: 10));
+    final response = await http
+        .post(
+          Uri.parse('$baseUrl/incidents/confirm-crisis'),
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode({'incidentId': incidentId, 'note': note}),
+        )
+        .timeout(const Duration(seconds: 10));
     if (response.statusCode != 200) {
-      throw HttpException('Server returned ${response.statusCode}: ${response.body}');
+      throw HttpException(
+        'Server returned ${response.statusCode}: ${response.body}',
+      );
     }
   }
 }

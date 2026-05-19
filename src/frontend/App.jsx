@@ -38,7 +38,9 @@ const resolveHotspotCoordinates = (locationName) => {
 };
 
 function App() {
-  const [user, setUser] = useState(null); // AUTH STATE
+  const [user, setUser] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('muhafiz_user')) || null; } catch { return null; }
+  });
   const [traces, setTraces] = useState([]);
   const [isSimulating, setIsSimulating] = useState(false);
   const [ws, setWs] = useState(null);
@@ -247,7 +249,16 @@ function App() {
     } catch (error) { console.error(error); } finally { setIsSimulating(false); }
   };
 
-  if (!user) return <SovereignLogin onLogin={setUser} />;
+  const handleLogin = (u) => {
+    localStorage.setItem('muhafiz_user', JSON.stringify(u));
+    setUser(u);
+  };
+  const handleLogout = () => {
+    localStorage.removeItem('muhafiz_user');
+    setUser(null);
+  };
+
+  if (!user) return <SovereignLogin onLogin={handleLogin} />;
 
   return (
     <div className="h-screen w-screen sovereign-bg overflow-hidden flex flex-col font-sans text-zinc-300">
@@ -278,6 +289,7 @@ function App() {
             dashboardView={dashboardView}
             setDashboardView={setDashboardView}
             user={user}
+            onLogout={handleLogout}
             sidebarOpen={sidebarOpen}
             setSidebarOpen={setSidebarOpen}
             selectedIncident={selectedIncident}

@@ -141,19 +141,24 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with TickerPr
 
           final LatLng coord = _geocode(locationName);
 
+          // Only include incidents within 5km of the citizen
+          final double distMeters = _distanceBetween(_citizenLatLng, coord);
+          if (distMeters > 5000) continue;
+
           mappedList.add({
             'id': incidentId,
             'title': title,
             'location': locationName,
             'coordinate': coord,
             'radius': status == 'CONFIRMED' ? 450.0 : 300.0,
-            'severity': status == 'CRITICAL' || title.contains('BLAST') || title.contains('FIRE')
-                ? 'CRITICAL'
-                : 'HIGH',
             'details': desc,
             'confidence': confidence,
+            'dist': distMeters,
           });
         }
+
+        // Sort by distance — nearest first
+        mappedList.sort((a, b) => (a['dist'] as double).compareTo(b['dist'] as double));
 
         setState(() {
           _activeCrises = mappedList;
@@ -203,19 +208,19 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with TickerPr
           'location': 'Disco Bakery Chowk',
           'coordinate': _geocode('Disco Bakery Chowk'),
           'radius': 350.0,
-          'severity': 'HIGH',
           'details': 'Commercial market fire. Air quality compromised.',
           'confidence': 0.94,
+          'dist': _distanceBetween(_citizenLatLng, _geocode('Disco Bakery Chowk')),
         },
         {
           'id': 'MHFZ-9023',
-          'title': 'POLICE CORDON',
+          'title': 'URBAN_FLOOD',
           'location': 'Kamran Chowrangi',
           'coordinate': _geocode('Kamran Chowrangi'),
           'radius': 400.0,
-          'severity': 'CRITICAL',
-          'details': 'Active investigation reported near main intersection.',
+          'details': 'Waterlogging reported. Road access blocked.',
           'confidence': 0.88,
+          'dist': _distanceBetween(_citizenLatLng, _geocode('Kamran Chowrangi')),
         }
       ];
       _isLoading = false;
@@ -278,6 +283,28 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with TickerPr
         MuhafizFeedback.showToast("Optimal Green Route Recalculated");
       }
     });
+  }
+
+  Color _typeColor(String type) {
+    final t = type.toUpperCase();
+    if (t.contains('FIRE') || t.contains('BLAST') || t.contains('EXPLOSION')) return const Color(0xFFFF3B30);
+    if (t.contains('FLOOD') || t.contains('WATER') || t.contains('RAIN')) return const Color(0xFF30A8FF);
+    if (t.contains('ACCIDENT') || t.contains('CRASH') || t.contains('COLLISION')) return const Color(0xFFFF9500);
+    if (t.contains('CRIME') || t.contains('SHOOT') || t.contains('TERROR') || t.contains('POLICE')) return const Color(0xFFBF5AF2);
+    if (t.contains('GAS') || t.contains('CHEMICAL') || t.contains('TOXIC')) return const Color(0xFF34C759);
+    if (t.contains('EARTHQUAKE') || t.contains('QUAKE')) return const Color(0xFFFF6B35);
+    return const Color(0xFFFF9F0A); // default amber
+  }
+
+  IconData _typeIcon(String type) {
+    final t = type.toUpperCase();
+    if (t.contains('FIRE') || t.contains('BLAST') || t.contains('EXPLOSION')) return LucideIcons.flame;
+    if (t.contains('FLOOD') || t.contains('WATER') || t.contains('RAIN')) return LucideIcons.droplets;
+    if (t.contains('ACCIDENT') || t.contains('CRASH') || t.contains('COLLISION')) return LucideIcons.car;
+    if (t.contains('CRIME') || t.contains('SHOOT') || t.contains('TERROR') || t.contains('POLICE')) return LucideIcons.siren;
+    if (t.contains('GAS') || t.contains('CHEMICAL') || t.contains('TOXIC')) return LucideIcons.wind;
+    if (t.contains('EARTHQUAKE') || t.contains('QUAKE')) return LucideIcons.activity;
+    return LucideIcons.alertTriangle;
   }
 
   @override
@@ -416,22 +443,20 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with TickerPr
 
     for (final crisis in _activeCrises) {
       final LatLng pos = crisis['coordinate'] as LatLng;
-      final bool isCritical = crisis['severity'] == 'CRITICAL';
-      final Color color = isCritical ? Colors.redAccent : Colors.orangeAccent;
-      
-      // Outer threat zone circle representation
+      final Color color = _typeColor(crisis['title']?.toString() ?? '');
+      final IconData pinIcon = _typeIcon(crisis['title']?.toString() ?? '');
+
       circleMarkers.add(
         CircleMarker(
           point: pos,
           radius: crisis['radius'] as double,
           useRadiusInMeter: true,
-          color: color.withValues(alpha: 0.12),
-          borderColor: color.withValues(alpha: 0.4),
+          color: color.withValues(alpha: 0.14),
+          borderColor: color.withValues(alpha: 0.5),
           borderStrokeWidth: 2,
         ),
       );
 
-      // Warning Pins — fixed size, no text overflow
       markers.add(
         Marker(
           point: pos,
@@ -448,21 +473,15 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with TickerPr
                   borderRadius: BorderRadius.circular(3),
                 ),
                 child: Text(
-                  // Show short ID only — take last 9 chars e.g. "MHFZ-4821"
                   crisis['id'].toString().length > 9
-                      ? crisis['id'].toString().substring(
-                          crisis['id'].toString().length - 9)
+                      ? crisis['id'].toString().substring(crisis['id'].toString().length - 9)
                       : crisis['id'].toString(),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.black,
-                    fontSize: 8,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: const TextStyle(color: Colors.black, fontSize: 8, fontWeight: FontWeight.bold),
                 ),
               ),
-              Icon(LucideIcons.alertTriangle, color: color, size: 22),
+              Icon(pinIcon, color: color, size: 22),
             ],
           ),
         ),
@@ -674,7 +693,12 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with TickerPr
                     itemCount: _activeCrises.length,
                     itemBuilder: (context, index) {
                       final crisis = _activeCrises[index];
-                      final bool isCritical = crisis['severity'] == 'CRITICAL';
+                      final Color typeColor = _typeColor(crisis['title']?.toString() ?? '');
+                      final IconData typeIcon = _typeIcon(crisis['title']?.toString() ?? '');
+                      final double dist = (crisis['dist'] as double? ?? 0);
+                      final String distLabel = dist < 1000
+                          ? '${dist.toInt()}m away'
+                          : '${(dist / 1000).toStringAsFixed(1)}km away';
                       return FadeInRight(
                         delay: Duration(milliseconds: index * 100),
                         child: Container(
@@ -684,9 +708,7 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with TickerPr
                           decoration: BoxDecoration(
                             color: MuhafizTheme.surfaceSlate,
                             borderRadius: BorderRadius.circular(4),
-                            border: Border.all(
-                              color: isCritical ? Colors.redAccent.withValues(alpha: 0.4) : MuhafizTheme.primaryEmerald.withValues(alpha: 0.2),
-                            ),
+                            border: Border.all(color: typeColor.withValues(alpha: 0.4)),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -696,20 +718,25 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with TickerPr
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
-                                      color: isCritical ? Colors.redAccent.withValues(alpha: 0.15) : Colors.amber.withValues(alpha: 0.15),
+                                      color: typeColor.withValues(alpha: 0.15),
                                       borderRadius: BorderRadius.circular(2),
-                                      border: Border.all(
-                                        color: isCritical ? Colors.redAccent : Colors.amber,
-                                      ),
+                                      border: Border.all(color: typeColor),
                                     ),
-                                    child: Text(
-                                      isCritical ? 'CRITICAL' : 'HIGH SEVERITY',
-                                      style: TextStyle(
-                                        fontFamily: 'JetBrains Mono',
-                                        fontSize: 8,
-                                        fontWeight: FontWeight.bold,
-                                        color: isCritical ? Colors.redAccent : Colors.amber,
-                                      ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(typeIcon, color: typeColor, size: 8),
+                                        const SizedBox(width: 3),
+                                        Text(
+                                          distLabel.toUpperCase(),
+                                          style: TextStyle(
+                                            fontFamily: 'JetBrains Mono',
+                                            fontSize: 8,
+                                            fontWeight: FontWeight.bold,
+                                            color: typeColor,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                   const SizedBox(width: 8),
@@ -718,11 +745,11 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with TickerPr
                                     style: const TextStyle(fontFamily: 'JetBrains Mono', fontSize: 9, color: MuhafizTheme.mutedSlate),
                                   ),
                                   const Spacer(),
-                                  const Icon(LucideIcons.radio, color: Colors.redAccent, size: 12),
+                                  Icon(LucideIcons.radio, color: typeColor, size: 12),
                                   const SizedBox(width: 4),
                                   Text(
                                     '${(crisis['confidence'] * 100).toInt()}% CONF',
-                                    style: const TextStyle(fontFamily: 'JetBrains Mono', fontSize: 8, color: Colors.white, fontWeight: FontWeight.bold),
+                                    style: TextStyle(fontFamily: 'JetBrains Mono', fontSize: 8, color: typeColor, fontWeight: FontWeight.bold),
                                   ),
                                 ],
                               ),
