@@ -61,7 +61,7 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
             const res = await fetch(`http://127.0.0.1:3001/api/department-resources/${activeDept}`);
             const data = await res.json();
             const hubList = Array.isArray(data) ? data : (data.hubs || []);
-            
+
             if (user.role === 'DEPT_ADMIN' && activeDept !== user.department) {
                 setHubs([]);
             } else {
@@ -108,7 +108,7 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
                 {/* Main Stage Icons */}
                 <div className="flex-1 flex flex-col gap-3 w-full items-center">
                     <div className="relative group">
-                        <button 
+                        <button
                             onClick={() => { setDashboardView('TACTICAL'); setView('dashboard'); }}
                             className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${dashboardView === 'TACTICAL' && view === 'dashboard' ? 'bg-white text-black' : 'text-zinc-500 hover:bg-white/5'}`}
                         >
@@ -120,7 +120,7 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
                     </div>
 
                     <div className="relative group">
-                        <button 
+                        <button
                             onClick={() => { setDashboardView('STRATEGIC'); setView('dashboard'); }}
                             className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${dashboardView === 'STRATEGIC' ? 'bg-white text-black' : 'text-zinc-500 hover:bg-white/5'}`}
                         >
@@ -132,7 +132,7 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
                     </div>
 
                     <div className="relative group">
-                        <button 
+                        <button
                             onClick={() => { setDashboardView('MISSIONS'); setView('dashboard'); }}
                             className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${dashboardView === 'MISSIONS' ? 'bg-white text-black' : 'text-zinc-500 hover:bg-white/5'}`}
                         >
@@ -144,7 +144,7 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
                     </div>
 
                     <div className="relative group">
-                        <button 
+                        <button
                             onClick={() => { setDashboardView('ARCHIVE'); setView('dashboard'); }}
                             className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${dashboardView === 'ARCHIVE' ? 'bg-white text-black' : 'text-zinc-500 hover:bg-white/5'}`}
                         >
@@ -157,7 +157,7 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
 
                     {user.role === 'SUPER_ADMIN' && (
                         <div className="relative group">
-                            <button 
+                            <button
                                 onClick={() => { setDashboardView('ADMIN'); setView('dashboard'); }}
                                 className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${dashboardView === 'ADMIN' ? 'bg-orange-500/20 text-orange-500 border border-orange-500/30' : 'text-zinc-500 hover:bg-white/5'}`}
                             >
@@ -170,7 +170,7 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
                     )}
 
                     <div className="relative group">
-                        <button 
+                        <button
                             onClick={() => { setDashboardView('BROADCAST'); setView('dashboard'); }}
                             className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${dashboardView === 'BROADCAST' ? 'bg-white text-black' : 'text-zinc-500 hover:bg-white/5'}`}
                         >
@@ -185,7 +185,7 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
 
                     {/* Agency Tools Icons */}
                     <div className="relative group">
-                        <button 
+                        <button
                             onClick={() => setView('guidance')}
                             className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${view === 'guidance' ? 'bg-emerald-600/20 text-emerald-500 border border-emerald-500/30' : 'text-zinc-500 hover:bg-white/5'}`}
                         >
@@ -197,7 +197,7 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
                     </div>
 
                     <div className="relative group">
-                        <button 
+                        <button
                             onClick={() => setView('manage')}
                             className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${view === 'manage' ? 'bg-blue-600/20 text-blue-500 border border-blue-500/30' : 'text-zinc-500 hover:bg-white/5'}`}
                         >
@@ -212,7 +212,7 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
                 {/* Bottom Toggle to Open */}
                 <div className="flex flex-col gap-2 items-center mb-4">
                     <div className="relative group">
-                        <button 
+                        <button
                             onClick={onLogout}
                             className="w-10 h-10 rounded-xl flex items-center justify-center text-red-500/70 hover:text-red-400 hover:bg-red-500/10 transition-all border border-transparent hover:border-red-500/20"
                         >
@@ -224,7 +224,7 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
                     </div>
 
                     <div className="relative group">
-                        <button 
+                        <button
                             onClick={() => setSidebarOpen(true)}
                             className="w-10 h-10 rounded-xl flex items-center justify-center text-zinc-500 hover:bg-white/5 hover:text-white transition-all border border-transparent hover:border-white/5"
                         >
@@ -255,7 +255,7 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
 
                 <nav className="flex flex-col gap-1.5">
                     <span className="text-[8px] font-black text-zinc-600 uppercase tracking-[0.3em] mb-2 ml-2">Main Stage</span>
-                    <button 
+                    <button
                         onClick={() => { setDashboardView('TACTICAL'); setView('dashboard'); }}
                         className={`flex items-center justify-between px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${dashboardView === 'TACTICAL' && view === 'dashboard' ? 'bg-white text-black shadow-xl' : 'text-zinc-500 hover:bg-white/5'}`}
                     >
@@ -264,7 +264,7 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
                         </div>
                         {dashboardView === 'TACTICAL' && view === 'dashboard' && <div className="w-1.5 h-1.5 rounded-full bg-black animate-pulse" />}
                     </button>
-                    <button 
+                    <button
                         onClick={() => { setDashboardView('STRATEGIC'); setView('dashboard'); setSidebarOpen(false); }}
                         className={`flex items-center justify-between px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${dashboardView === 'STRATEGIC' ? 'bg-white text-black shadow-xl' : 'text-zinc-500 hover:bg-white/5'}`}
                     >
@@ -273,7 +273,7 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
                         </div>
                         {dashboardView === 'STRATEGIC' && <div className="w-1.5 h-1.5 rounded-full bg-black animate-pulse" />}
                     </button>
-                    <button 
+                    <button
                         onClick={() => { setDashboardView('MISSIONS'); setView('dashboard'); setSidebarOpen(false); }}
                         className={`flex items-center justify-between px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${dashboardView === 'MISSIONS' ? 'bg-white text-black shadow-xl' : 'text-zinc-500 hover:bg-white/5'}`}
                     >
@@ -282,7 +282,7 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
                         </div>
                         {dashboardView === 'MISSIONS' && <div className="w-1.5 h-1.5 rounded-full bg-black animate-pulse" />}
                     </button>
-                    <button 
+                    <button
                         onClick={() => { setDashboardView('ARCHIVE'); setView('dashboard'); setSidebarOpen(false); }}
                         className={`flex items-center justify-between px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${dashboardView === 'ARCHIVE' ? 'bg-white text-black shadow-xl' : 'text-zinc-500 hover:bg-white/5'}`}
                     >
@@ -292,7 +292,7 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
                         {dashboardView === 'ARCHIVE' && <div className="w-1.5 h-1.5 rounded-full bg-black animate-pulse" />}
                     </button>
                     {user.role === 'SUPER_ADMIN' && (
-                        <button 
+                        <button
                             onClick={() => { setDashboardView('ADMIN'); setView('dashboard'); setSidebarOpen(false); }}
                             className={`flex items-center justify-between px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${dashboardView === 'ADMIN' ? 'bg-orange-500/20 text-orange-500 border border-orange-500/30' : 'text-zinc-500 hover:bg-white/5'}`}
                         >
@@ -302,7 +302,7 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
                             {dashboardView === 'ADMIN' && <div className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />}
                         </button>
                     )}
-                    <button 
+                    <button
                         onClick={() => { setDashboardView('BROADCAST'); setView('dashboard'); setSidebarOpen(false); }}
                         className={`flex items-center justify-between px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${dashboardView === 'BROADCAST' ? 'bg-white text-black shadow-xl' : 'text-zinc-500 hover:bg-white/5'}`}
                     >
@@ -313,15 +313,15 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
                     </button>
 
                     <div className="my-4 h-px bg-white/5" />
-                    
+
                     <span className="text-[8px] font-black text-zinc-600 uppercase tracking-[0.3em] mb-2 ml-2">Agency Tools</span>
-                    <button 
+                    <button
                         onClick={() => { setView('guidance'); setSidebarOpen(false); }}
                         className={`flex items-center gap-3 px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === 'guidance' ? 'bg-emerald-600/20 text-emerald-500 border border-emerald-500/30' : 'text-zinc-500 hover:bg-white/5'}`}
                     >
                         <Terminal size={14} /> Command Override
                     </button>
-                    <button 
+                    <button
                         onClick={() => { setView('manage'); setSidebarOpen(false); }}
                         className={`flex items-center gap-3 px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === 'manage' ? 'bg-blue-600/20 text-blue-500 border border-blue-500/30' : 'text-zinc-500 hover:bg-white/5'}`}
                     >
@@ -342,13 +342,12 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
                                             <span className="text-[10px] font-mono font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">
                                                 {selectedIncident.id}
                                             </span>
-                                            <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full border ${
-                                                selectedIncident.status === 'RESOLVED' || selectedIncident.status === 'CONFIRMED'
-                                                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+                                            <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full border ${selectedIncident.status === 'RESOLVED' || selectedIncident.status === 'CONFIRMED'
+                                                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
                                                     : selectedIncident.status === 'RETRACTED'
                                                         ? 'bg-zinc-800 border-zinc-700 text-zinc-400'
                                                         : 'bg-red-500/10 border-red-500/20 text-red-400 animate-pulse'
-                                            }`}>
+                                                }`}>
                                                 {selectedIncident.status || 'ACTIVE'}
                                             </span>
                                         </div>
@@ -356,8 +355,8 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
                                             <MapPin size={10} className="text-zinc-500" /> {selectedIncident.location?.landmark || 'Karachi Sector'}
                                         </h4>
                                     </div>
-                                    <button 
-                                        onClick={() => setSelectedIncident(null)} 
+                                    <button
+                                        onClick={() => setSelectedIncident(null)}
                                         className="text-zinc-500 hover:text-white text-[9px] bg-white/5 w-5 h-5 rounded-full flex items-center justify-center border border-white/5"
                                         title="Close details"
                                     >
@@ -421,7 +420,7 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
 
                                 <div className="space-y-2 border-t border-white/5 pt-3">
                                     <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest block ml-1">Auditor Agent Controls</span>
-                                    
+
                                     <div className="flex gap-2">
                                         <button
                                             disabled={isSaving || selectedIncident.status === 'CONFIRMED' || selectedIncident.status === 'RETRACTED'}
@@ -495,7 +494,7 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
                         {/* Directive Input */}
                         <div className="space-y-4">
                             <div className="relative">
-                                <textarea 
+                                <textarea
                                     id="directive_input"
                                     placeholder="Enter Sovereign Directive..."
                                     className="w-full bg-zinc-900/50 border border-white/10 rounded-xl p-4 text-[11px] text-zinc-300 font-mono outline-none focus:border-emerald-500/50 transition-all h-24"
@@ -505,7 +504,7 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
                                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                                 </div>
                             </div>
-                            <button 
+                            <button
                                 onClick={async () => {
                                     const input = document.getElementById('directive_input');
                                     const directive = input.value;
@@ -530,12 +529,12 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
                     <div className="space-y-4 animate-in fade-in slide-in-from-left-2 pb-20">
                         <div className="flex justify-between items-center px-2">
                             <h5 className="text-[10px] font-black uppercase tracking-widest text-blue-500">Edit Hubs</h5>
-                            <button onClick={addHub} className="p-1 hover:bg-zinc-800 rounded text-blue-500"><Plus size={16}/></button>
+                            <button onClick={addHub} className="p-1 hover:bg-zinc-800 rounded text-blue-500"><Plus size={16} /></button>
                         </div>
-                        
+
                         {hubs.map((hub) => (
                             <div key={hub.id} className="p-4 bg-zinc-900 border border-zinc-800 rounded-xl space-y-3">
-                                <input 
+                                <input
                                     className="w-full bg-transparent border-none text-xs font-bold text-white focus:outline-none"
                                     value={hub.name}
                                     onChange={(e) => updateHub(hub.id, 'name', e.target.value)}
@@ -546,7 +545,7 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
                                     <EditField type="number" label="Amb" value={hub.ambulances} onChange={(v) => updateHub(hub.id, 'ambulances', parseInt(v))} />
                                     <EditField type="number" label="Off" value={hub.officers} onChange={(v) => updateHub(hub.id, 'officers', parseInt(v))} />
                                 </div>
-                                <button 
+                                <button
                                     onClick={() => setHubs(hubs.filter(h => h.id !== hub.id))}
                                     className="w-full py-1 text-[8px] text-zinc-600 hover:text-red-500 flex items-center justify-center gap-1 uppercase font-bold"
                                 >
@@ -561,7 +560,7 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
             {/* Persistence Layer */}
             {view === 'manage' && (
                 <div className="p-4 bg-[#09090b] border-t border-zinc-800">
-                    <button 
+                    <button
                         onClick={handleSave}
                         disabled={isSaving}
                         className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-xl shadow-blue-900/20"
@@ -573,39 +572,39 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
 
             {/* Profile & Switcher Section */}
             <div className="p-4 bg-black/40 border-t border-zinc-800 space-y-4">
-                 <div className="flex flex-col gap-1">
-                     <span className="text-[7px] font-black text-zinc-600 uppercase tracking-widest">Active Agency</span>
-                     <select 
+                <div className="flex flex-col gap-1">
+                    <span className="text-[7px] font-black text-zinc-600 uppercase tracking-widest">Active Agency</span>
+                    <select
                         disabled={user.role === 'DEPT_ADMIN'}
                         value={activeDept}
                         onChange={(e) => setDept(e.target.value)}
                         className="w-full bg-zinc-900 border border-zinc-800 text-[9px] text-zinc-500 font-bold p-2 rounded-lg outline-none uppercase tracking-tighter disabled:opacity-50"
-                     >
+                    >
                         {Object.keys(departments).map(id => (
                             <option key={id} value={id}>{departments[id].name}</option>
                         ))}
-                     </select>
-                 </div>
+                    </select>
+                </div>
 
-                 {/* Profile Details & Sign Out */}
-                 <div className="flex items-center justify-between p-3 rounded-2xl bg-zinc-950/40 border border-white/5 backdrop-blur-md animate-in fade-in duration-300">
-                     <div className="flex items-center gap-2.5 min-w-0">
-                         <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 shrink-0">
-                             <User size={14} />
-                         </div>
-                         <div className="min-w-0">
-                             <h5 className="text-[10px] font-bold text-white leading-none mb-0.5 truncate">{user.name}</h5>
-                             <span className="text-[7px] font-mono text-zinc-500 uppercase tracking-wider">{user.role}</span>
-                         </div>
-                     </div>
-                     <button 
-                         onClick={onLogout}
-                         className="p-2 bg-red-950/20 hover:bg-red-500/10 border border-red-500/10 hover:border-red-500/30 text-red-400 hover:text-red-300 rounded-xl transition-all shadow-lg shadow-red-950/20 shrink-0"
-                         title="Sign Out of Sovereign Command"
-                     >
-                         <LogOut size={12} />
-                     </button>
-                 </div>
+                {/* Profile Details & Sign Out */}
+                <div className="flex items-center justify-between p-3 rounded-2xl bg-zinc-950/40 border border-white/5 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500 shrink-0">
+                            <User size={14} />
+                        </div>
+                        <div className="min-w-0">
+                            <h5 className="text-[10px] font-bold text-white leading-none mb-0.5 truncate">{user.name}</h5>
+                            <span className="text-[7px] font-mono text-zinc-500 uppercase tracking-wider">{user.role}</span>
+                        </div>
+                    </div>
+                    <button
+                        onClick={onLogout}
+                        className="p-2 bg-red-950/20 hover:bg-red-500/10 border border-red-500/10 hover:border-red-500/30 text-red-400 hover:text-red-300 rounded-xl transition-all shadow-lg shadow-red-950/20 shrink-0"
+                        title="Sign Out of Sovereign Command"
+                    >
+                        <LogOut size={12} />
+                    </button>
+                </div>
             </div>
         </div>
     );
@@ -618,10 +617,10 @@ const Stat = ({ label, value, mini }) => (
     </div>
 );
 
-const EditField = ({ label, value, onChange, type="text" }) => (
+const EditField = ({ label, value, onChange, type = "text" }) => (
     <div className="space-y-1">
         <label className="text-[8px] font-black text-zinc-600 uppercase tracking-tighter">{label}</label>
-        <input 
+        <input
             type={type}
             value={value}
             onChange={(e) => onChange(e.target.value)}

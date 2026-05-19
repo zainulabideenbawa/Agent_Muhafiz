@@ -38,23 +38,7 @@ const resolveHotspotCoordinates = (locationName) => {
 };
 
 function App() {
-  const [user, setUser] = useState(() => {
-    try {
-      const stored = localStorage.getItem('muhafiz_user');
-      return stored ? JSON.parse(stored) : null;
-    } catch {
-      return null;
-    }
-  });
-
-  const handleLogin = (newUser) => {
-    setUser(newUser);
-    if (newUser) {
-      localStorage.setItem('muhafiz_user', JSON.stringify(newUser));
-    } else {
-      localStorage.removeItem('muhafiz_user');
-    }
-  };
+  const [user, setUser] = useState(null); // AUTH STATE
   const [traces, setTraces] = useState([]);
   const [isSimulating, setIsSimulating] = useState(false);
   const [ws, setWs] = useState(null);
@@ -64,7 +48,7 @@ function App() {
   const [dashboardView, setDashboardView] = useState('TACTICAL'); // 'TACTICAL' | 'STRATEGIC'
   const [deptStats, setDeptStats] = useState({ officers: 0, trucks: 0, ambulances: 0 });
   const [sidebarView, setSidebarView] = useState('dashboard'); // 'dashboard' | 'edit'
-  
+
   // Dashboard state
   const [livesSaved, setLivesSaved] = useState(0);
   const [incidents, setIncidents] = useState([]);
@@ -112,7 +96,7 @@ function App() {
               id: inc.incident_id,
               department: dept,
               type: inc.type?.toLowerCase() || 'urban_flood',
-              location: { 
+              location: {
                 landmark: landmarkName,
                 lng: coords.lng,
                 lat: coords.lat
@@ -162,11 +146,11 @@ function App() {
       const data = JSON.parse(event.data);
       if (data.type === 'TRACE_LOG') {
         console.log(`[Tactical] Incoming Log: ${data.log.agent} for ${data.assigned_department}`);
-        
-        setTraces(prev => [...prev, { 
-          incidentId: data.incidentId, 
-          log: { ...data.log, timestamp: data.log.timestamp || Date.now() }, 
-          department: data.assigned_department 
+
+        setTraces(prev => [...prev, {
+          incidentId: data.incidentId,
+          log: { ...data.log, timestamp: data.log.timestamp || Date.now() },
+          department: data.assigned_department
         }]);
 
         if (data.log.agent === 'The Sentinel' && data.log.outcome === 'Success') {
@@ -181,7 +165,7 @@ function App() {
             id: data.incidentId,
             department: data.assigned_department,
             type: data.log.message.includes('fire') ? 'fire' : 'urban_flood',
-            location: { 
+            location: {
               landmark: landmarkName,
               lng: coords.lng,
               lat: coords.lat
@@ -196,25 +180,25 @@ function App() {
           const isConfirmed = data.log.message.includes('CONFIRMED') || data.log.message.includes('confirm') || data.log.message.includes('CONFIRM');
           const isResolved = data.log.outcome === 'Crisis Resolved' || data.log.message.includes('Resolved') || data.log.message.includes('resolved');
           const newStatus = isRetracted ? 'RETRACTED' : (isConfirmed ? 'CONFIRMED' : (isResolved ? 'RESOLVED' : 'ACTIVE'));
-          
-          setIncidents(prevIncidents => prevIncidents.map(inc => 
-            inc.id === data.incidentId 
-              ? { 
-                  ...inc, 
-                  status: newStatus,
-                  data: {
-                    ...inc.data,
-                    retraction_reason: isRetracted ? data.log.message.split('confirms ')[1]?.replace('.', '') : inc.data?.retraction_reason,
-                    officer_note: isConfirmed ? data.log.message.split('confirms ')[1]?.replace('.', '') : inc.data?.officer_note
-                  }
-                } 
+
+          setIncidents(prevIncidents => prevIncidents.map(inc =>
+            inc.id === data.incidentId
+              ? {
+                ...inc,
+                status: newStatus,
+                data: {
+                  ...inc.data,
+                  retraction_reason: isRetracted ? data.log.message.split('confirms ')[1]?.replace('.', '') : inc.data?.retraction_reason,
+                  officer_note: isConfirmed ? data.log.message.split('confirms ')[1]?.replace('.', '') : inc.data?.officer_note
+                }
+              }
               : inc
           ));
 
           setSelectedIncident(prevSelected => {
             if (prevSelected && prevSelected.id === data.incidentId) {
-              return { 
-                ...prevSelected, 
+              return {
+                ...prevSelected,
                 status: newStatus,
                 data: {
                   ...prevSelected.data,
@@ -235,7 +219,7 @@ function App() {
         }
 
         if (data.log.agent === 'The TruthEngine' || data.log.agent === 'The Truth-Engine') {
-          setIncidents(prevIncidents => prevIncidents.map(inc => 
+          setIncidents(prevIncidents => prevIncidents.map(inc =>
             inc.id === data.incidentId ? { ...inc, status: 'INVESTIGATING' } : inc
           ));
 
@@ -292,7 +276,7 @@ function App() {
   }, []);
 
   // Unified Filtering Logic
-  const filteredIncidents = (incidents || []).filter(inc => 
+  const filteredIncidents = (incidents || []).filter(inc =>
     !inc || !inc.department || inc.department === activeDept || inc.support_agency === activeDept
   );
   const filteredTraces = (traces || []).filter(t => {
@@ -320,14 +304,14 @@ function App() {
     } catch (error) { console.error(error); } finally { setIsSimulating(false); }
   };
 
-  if (!user) return <SovereignLogin onLogin={handleLogin} />;
+  if (!user) return <SovereignLogin onLogin={setUser} />;
 
   return (
     <div className="h-screen w-screen sovereign-bg overflow-hidden flex flex-col font-sans text-zinc-300">
       {/* 1. MASTER HEADER (Fixed Authority) */}
-      <MetricsUI 
-        activeCrises={filteredIncidents.length} 
-        deptStats={safeDeptStats} 
+      <MetricsUI
+        activeCrises={filteredIncidents.length}
+        deptStats={safeDeptStats}
         livesSaved={livesSaved}
         toggleSidebar={() => setSidebarOpen(!sidebarOpen)}
         activeDept={activeDept}
@@ -336,21 +320,22 @@ function App() {
 
       {/* 2. MAIN OPERATIONAL AREA */}
       <div className="flex-1 flex relative overflow-hidden">
-        
+
         {/* Left: Sovereign Sidebar (Asset Management) */}
-        <div 
+        <div
           className="absolute left-0 top-0 bottom-0 z-40 transition-all duration-500 ease-in-out overflow-visible"
           style={{ width: sidebarOpen ? '288px' : '64px', paddingTop: '56px' }}
         >
-          <SovereignSidebar 
-            activeDept={activeDept} 
-            setDept={setActiveDept} 
+          <SovereignSidebar
+            activeDept={activeDept}
+            setDept={setActiveDept}
             departments={departments}
             view={sidebarView}
             setView={setSidebarView}
             dashboardView={dashboardView}
             setDashboardView={setDashboardView}
             user={user}
+            onLogout={handleLogout}
             sidebarOpen={sidebarOpen}
             setSidebarOpen={setSidebarOpen}
             selectedIncident={selectedIncident}
@@ -360,24 +345,24 @@ function App() {
         </div>
 
         {/* Center: Tactical Map / Strategic Audit */}
-        <div 
+        <div
           className="flex-1 relative bg-zinc-900 transition-all duration-500"
           style={{ paddingLeft: dashboardView === 'TACTICAL' ? '0px' : (sidebarOpen ? '288px' : '64px') }}
         >
           {dashboardView === 'TACTICAL' ? (
             <div className="w-full h-full relative">
-              <DigitalTwinMap 
-                incidents={filteredIncidents} 
+              <DigitalTwinMap
+                incidents={filteredIncidents}
                 onMarkerClick={(inc) => {
                   setSelectedIncident(inc);
                   setSidebarOpen(true);
                   setSidebarView('dashboard');
-                }} 
+                }}
               />
-              
+
               {/* Tactical Overlays (Map Space Only) */}
-              <div 
-                className="absolute top-6 left-6 z-20 transition-all duration-500" 
+              <div
+                className="absolute top-6 left-6 z-20 transition-all duration-500"
                 style={{ transform: sidebarOpen ? 'translateX(288px)' : 'translateX(64px)' }}
               >
                 <TacticalLegend />
@@ -442,10 +427,10 @@ function App() {
       {/* Resolution Notification Banner — False Alarm / Road Clear / Confirmed / Officer Dispatched */}
       {resolutionAlert && (() => {
         const colorMap = {
-          FALSE_ALARM:     { bg: 'from-amber-900/95 to-amber-800/95', border: 'border-amber-500', text: 'text-amber-300', dot: 'bg-amber-400' },
-          ROAD_CLEAR:      { bg: 'from-emerald-900/95 to-emerald-800/95', border: 'border-emerald-500', text: 'text-emerald-300', dot: 'bg-emerald-400' },
-          CONFIRMED:       { bg: 'from-red-900/95 to-red-800/95', border: 'border-red-500', text: 'text-red-300', dot: 'bg-red-400' },
-          QUEST_ACCEPTED:  { bg: 'from-blue-900/95 to-blue-800/95', border: 'border-blue-500', text: 'text-blue-300', dot: 'bg-blue-400' },
+          FALSE_ALARM: { bg: 'from-amber-900/95 to-amber-800/95', border: 'border-amber-500', text: 'text-amber-300', dot: 'bg-amber-400' },
+          ROAD_CLEAR: { bg: 'from-emerald-900/95 to-emerald-800/95', border: 'border-emerald-500', text: 'text-emerald-300', dot: 'bg-emerald-400' },
+          CONFIRMED: { bg: 'from-red-900/95 to-red-800/95', border: 'border-red-500', text: 'text-red-300', dot: 'bg-red-400' },
+          QUEST_ACCEPTED: { bg: 'from-blue-900/95 to-blue-800/95', border: 'border-blue-500', text: 'text-blue-300', dot: 'bg-blue-400' },
         };
         const c = colorMap[resolutionAlert.resolution] || colorMap['ROAD_CLEAR'];
         return (
