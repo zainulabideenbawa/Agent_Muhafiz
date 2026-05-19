@@ -1,9 +1,47 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, Truck, Users, LayoutDashboard, Settings, User, Save, Plus, MapPin, Trash2, Terminal, Send, TrendingUp, Megaphone, ClipboardList, Cpu, Search, ChevronRight } from 'lucide-react';
 
-const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, setDashboardView, user, sidebarOpen, setSidebarOpen }) => {
+const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, setDashboardView, user, sidebarOpen, setSidebarOpen, selectedIncident, setSelectedIncident }) => {
     const [hubs, setHubs] = useState([]);
     const [isSaving, setIsSaving] = useState(false);
+
+    const handleAuditorAction = async (actionType) => {
+        if (!selectedIncident) return;
+        setIsSaving(true);
+        try {
+            let endpoint = '';
+            let body = {};
+            if (actionType === 'CONFIRM') {
+                endpoint = 'http://127.0.0.1:3001/api/incidents/confirm-crisis';
+                body = { incidentId: selectedIncident.id, note: 'Crisis officially confirmed by Sovereign Command.' };
+            } else {
+                endpoint = 'http://127.0.0.1:3001/api/incidents/retract-alert';
+                body = { incidentId: selectedIncident.id, reason: actionType === 'FALSE_ALARM' ? 'False Alarm' : 'Road Clear' };
+            }
+
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            const data = await res.json();
+            if (data.success) {
+                setSelectedIncident(prev => ({
+                    ...prev,
+                    status: actionType === 'CONFIRM' ? 'CONFIRMED' : 'RETRACTED',
+                    data: {
+                        ...prev.data,
+                        retraction_reason: actionType === 'FALSE_ALARM' ? 'False Alarm' : (actionType === 'ROAD_CLEAR' ? 'Road Clear' : prev.data?.retraction_reason),
+                        officer_note: actionType === 'CONFIRM' ? 'Crisis officially confirmed by Sovereign Command.' : prev.data?.officer_note
+                    }
+                }));
+            }
+        } catch (e) {
+            console.error("Auditor action failed:", e);
+        } finally {
+            setIsSaving(false);
+        }
+    };
 
     const departments = {
         'KMC_HEALTH': { name: 'KMC Health & Infra', color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
@@ -56,86 +94,133 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
 
     if (!sidebarOpen) {
         return (
-            <div className="w-full h-full bg-black/10 backdrop-blur-3xl border-r border-white/5 flex flex-col items-center py-6 shadow-2xl relative overflow-hidden z-50 transition-all duration-500">
+            <div className="w-full h-full bg-black/10 backdrop-blur-3xl border-r border-white/5 flex flex-col items-center py-6 shadow-2xl relative overflow-visible z-50 transition-all duration-500">
                 {/* Dept Icon */}
-                <div className={`p-2.5 rounded-xl ${currentDept.bg} ${currentDept.color} mb-6 border border-white/5 cursor-pointer`} title={currentDept.name}>
-                    <Shield size={18} />
+                <div className="relative group mb-6">
+                    <div className={`p-2.5 rounded-xl ${currentDept.bg} ${currentDept.color} border border-white/5 cursor-pointer`}>
+                        <Shield size={18} />
+                    </div>
+                    <div className="absolute left-14 top-1/2 -translate-y-1/2 ml-2 px-3 py-1.5 rounded-lg bg-zinc-950/95 border border-white/10 text-white text-[9px] font-black tracking-widest uppercase pointer-events-none opacity-0 scale-95 origin-left group-hover:opacity-100 group-hover:scale-100 transition-all duration-300 backdrop-blur-md shadow-2xl whitespace-nowrap z-[100]">
+                        {currentDept.name}
+                    </div>
                 </div>
 
                 {/* Main Stage Icons */}
                 <div className="flex-1 flex flex-col gap-3 w-full items-center">
-                    <button 
-                        onClick={() => { setDashboardView('TACTICAL'); setView('dashboard'); }}
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${dashboardView === 'TACTICAL' && view === 'dashboard' ? 'bg-white text-black' : 'text-zinc-500 hover:bg-white/5'}`}
-                        title="Tactical Grid"
-                    >
-                        <LayoutDashboard size={16} />
-                    </button>
-                    <button 
-                        onClick={() => { setDashboardView('STRATEGIC'); setView('dashboard'); }}
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${dashboardView === 'STRATEGIC' ? 'bg-white text-black' : 'text-zinc-500 hover:bg-white/5'}`}
-                        title="Strategic Audit"
-                    >
-                        <TrendingUp size={16} />
-                    </button>
-                    <button 
-                        onClick={() => { setDashboardView('MISSIONS'); setView('dashboard'); }}
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${dashboardView === 'MISSIONS' ? 'bg-white text-black' : 'text-zinc-500 hover:bg-white/5'}`}
-                        title="Mission Board"
-                    >
-                        <ClipboardList size={16} />
-                    </button>
-                    <button 
-                        onClick={() => { setDashboardView('ARCHIVE'); setView('dashboard'); }}
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${dashboardView === 'ARCHIVE' ? 'bg-white text-black' : 'text-zinc-500 hover:bg-white/5'}`}
-                        title="Audit Explorer"
-                    >
-                        <Search size={16} />
-                    </button>
-                    {user.role === 'SUPER_ADMIN' && (
+                    <div className="relative group">
                         <button 
-                            onClick={() => { setDashboardView('ADMIN'); setView('dashboard'); }}
-                            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${dashboardView === 'ADMIN' ? 'bg-orange-500/20 text-orange-500 border border-orange-500/30' : 'text-zinc-500 hover:bg-white/5'}`}
-                            title="Urban Optimization"
+                            onClick={() => { setDashboardView('TACTICAL'); setView('dashboard'); }}
+                            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${dashboardView === 'TACTICAL' && view === 'dashboard' ? 'bg-white text-black' : 'text-zinc-500 hover:bg-white/5'}`}
                         >
-                            <Cpu size={16} />
+                            <LayoutDashboard size={16} />
                         </button>
+                        <div className="absolute left-14 top-1/2 -translate-y-1/2 ml-2 px-3 py-1.5 rounded-lg bg-zinc-950/95 border border-white/10 text-white text-[9px] font-black tracking-widest uppercase pointer-events-none opacity-0 scale-95 origin-left group-hover:opacity-100 group-hover:scale-100 transition-all duration-300 backdrop-blur-md shadow-2xl whitespace-nowrap z-[100]">
+                            Tactical Grid
+                        </div>
+                    </div>
+
+                    <div className="relative group">
+                        <button 
+                            onClick={() => { setDashboardView('STRATEGIC'); setView('dashboard'); }}
+                            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${dashboardView === 'STRATEGIC' ? 'bg-white text-black' : 'text-zinc-500 hover:bg-white/5'}`}
+                        >
+                            <TrendingUp size={16} />
+                        </button>
+                        <div className="absolute left-14 top-1/2 -translate-y-1/2 ml-2 px-3 py-1.5 rounded-lg bg-zinc-950/95 border border-white/10 text-white text-[9px] font-black tracking-widest uppercase pointer-events-none opacity-0 scale-95 origin-left group-hover:opacity-100 group-hover:scale-100 transition-all duration-300 backdrop-blur-md shadow-2xl whitespace-nowrap z-[100]">
+                            Strategic Audit
+                        </div>
+                    </div>
+
+                    <div className="relative group">
+                        <button 
+                            onClick={() => { setDashboardView('MISSIONS'); setView('dashboard'); }}
+                            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${dashboardView === 'MISSIONS' ? 'bg-white text-black' : 'text-zinc-500 hover:bg-white/5'}`}
+                        >
+                            <ClipboardList size={16} />
+                        </button>
+                        <div className="absolute left-14 top-1/2 -translate-y-1/2 ml-2 px-3 py-1.5 rounded-lg bg-zinc-950/95 border border-white/10 text-white text-[9px] font-black tracking-widest uppercase pointer-events-none opacity-0 scale-95 origin-left group-hover:opacity-100 group-hover:scale-100 transition-all duration-300 backdrop-blur-md shadow-2xl whitespace-nowrap z-[100]">
+                            Mission Board
+                        </div>
+                    </div>
+
+                    <div className="relative group">
+                        <button 
+                            onClick={() => { setDashboardView('ARCHIVE'); setView('dashboard'); }}
+                            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${dashboardView === 'ARCHIVE' ? 'bg-white text-black' : 'text-zinc-500 hover:bg-white/5'}`}
+                        >
+                            <Search size={16} />
+                        </button>
+                        <div className="absolute left-14 top-1/2 -translate-y-1/2 ml-2 px-3 py-1.5 rounded-lg bg-zinc-950/95 border border-white/10 text-white text-[9px] font-black tracking-widest uppercase pointer-events-none opacity-0 scale-95 origin-left group-hover:opacity-100 group-hover:scale-100 transition-all duration-300 backdrop-blur-md shadow-2xl whitespace-nowrap z-[100]">
+                            Audit Explorer
+                        </div>
+                    </div>
+
+                    {user.role === 'SUPER_ADMIN' && (
+                        <div className="relative group">
+                            <button 
+                                onClick={() => { setDashboardView('ADMIN'); setView('dashboard'); }}
+                                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${dashboardView === 'ADMIN' ? 'bg-orange-500/20 text-orange-500 border border-orange-500/30' : 'text-zinc-500 hover:bg-white/5'}`}
+                            >
+                                <Cpu size={16} />
+                            </button>
+                            <div className="absolute left-14 top-1/2 -translate-y-1/2 ml-2 px-3 py-1.5 rounded-lg bg-zinc-950/95 border border-orange-500/20 text-orange-500 text-[9px] font-black tracking-widest uppercase pointer-events-none opacity-0 scale-95 origin-left group-hover:opacity-100 group-hover:scale-100 transition-all duration-300 backdrop-blur-md shadow-2xl whitespace-nowrap z-[100]">
+                                Urban Optimization
+                            </div>
+                        </div>
                     )}
-                    <button 
-                        onClick={() => { setDashboardView('BROADCAST'); setView('dashboard'); }}
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${dashboardView === 'BROADCAST' ? 'bg-white text-black' : 'text-zinc-500 hover:bg-white/5'}`}
-                        title="Public Alerts"
-                    >
-                        <Megaphone size={16} />
-                    </button>
+
+                    <div className="relative group">
+                        <button 
+                            onClick={() => { setDashboardView('BROADCAST'); setView('dashboard'); }}
+                            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${dashboardView === 'BROADCAST' ? 'bg-white text-black' : 'text-zinc-500 hover:bg-white/5'}`}
+                        >
+                            <Megaphone size={16} />
+                        </button>
+                        <div className="absolute left-14 top-1/2 -translate-y-1/2 ml-2 px-3 py-1.5 rounded-lg bg-zinc-950/95 border border-white/10 text-white text-[9px] font-black tracking-widest uppercase pointer-events-none opacity-0 scale-95 origin-left group-hover:opacity-100 group-hover:scale-100 transition-all duration-300 backdrop-blur-md shadow-2xl whitespace-nowrap z-[100]">
+                            Public Alerts
+                        </div>
+                    </div>
 
                     <div className="w-8 h-px bg-white/5 my-2" />
 
                     {/* Agency Tools Icons */}
-                    <button 
-                        onClick={() => setView('guidance')}
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${view === 'guidance' ? 'bg-emerald-600/20 text-emerald-500 border border-emerald-500/30' : 'text-zinc-500 hover:bg-white/5'}`}
-                        title="Command Override"
-                    >
-                        <Terminal size={16} />
-                    </button>
-                    <button 
-                        onClick={() => setView('manage')}
-                        className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${view === 'manage' ? 'bg-blue-600/20 text-blue-500 border border-blue-500/30' : 'text-zinc-500 hover:bg-white/5'}`}
-                        title="Fleet Management"
-                    >
-                        <Settings size={16} />
-                    </button>
+                    <div className="relative group">
+                        <button 
+                            onClick={() => setView('guidance')}
+                            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${view === 'guidance' ? 'bg-emerald-600/20 text-emerald-500 border border-emerald-500/30' : 'text-zinc-500 hover:bg-white/5'}`}
+                        >
+                            <Terminal size={16} />
+                        </button>
+                        <div className="absolute left-14 top-1/2 -translate-y-1/2 ml-2 px-3 py-1.5 rounded-lg bg-zinc-950/95 border border-emerald-500/20 text-emerald-500 text-[9px] font-black tracking-widest uppercase pointer-events-none opacity-0 scale-95 origin-left group-hover:opacity-100 group-hover:scale-100 transition-all duration-300 backdrop-blur-md shadow-2xl whitespace-nowrap z-[100]">
+                            Command Override
+                        </div>
+                    </div>
+
+                    <div className="relative group">
+                        <button 
+                            onClick={() => setView('manage')}
+                            className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${view === 'manage' ? 'bg-blue-600/20 text-blue-500 border border-blue-500/30' : 'text-zinc-500 hover:bg-white/5'}`}
+                        >
+                            <Settings size={16} />
+                        </button>
+                        <div className="absolute left-14 top-1/2 -translate-y-1/2 ml-2 px-3 py-1.5 rounded-lg bg-zinc-950/95 border border-blue-500/20 text-blue-500 text-[9px] font-black tracking-widest uppercase pointer-events-none opacity-0 scale-95 origin-left group-hover:opacity-100 group-hover:scale-100 transition-all duration-300 backdrop-blur-md shadow-2xl whitespace-nowrap z-[100]">
+                            Fleet Management
+                        </div>
+                    </div>
                 </div>
 
                 {/* Bottom Toggle to Open */}
-                <button 
-                    onClick={() => setSidebarOpen(true)}
-                    className="w-10 h-10 rounded-xl flex items-center justify-center text-zinc-500 hover:bg-white/5 hover:text-white transition-all border border-transparent hover:border-white/5"
-                    title="Expand Menu"
-                >
-                    <ChevronRight size={16} />
-                </button>
+                <div className="relative group">
+                    <button 
+                        onClick={() => setSidebarOpen(true)}
+                        className="w-10 h-10 rounded-xl flex items-center justify-center text-zinc-500 hover:bg-white/5 hover:text-white transition-all border border-transparent hover:border-white/5"
+                    >
+                        <ChevronRight size={16} />
+                    </button>
+                    <div className="absolute left-14 top-1/2 -translate-y-1/2 ml-2 px-3 py-1.5 rounded-lg bg-zinc-950/95 border border-white/10 text-white text-[9px] font-black tracking-widest uppercase pointer-events-none opacity-0 scale-95 origin-left group-hover:opacity-100 group-hover:scale-100 transition-all duration-300 backdrop-blur-md shadow-2xl whitespace-nowrap z-[100]">
+                        Expand Menu
+                    </div>
+                </div>
             </div>
         );
     }
@@ -235,27 +320,145 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
             <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
                 {view === 'dashboard' ? (
                     <div className="space-y-4">
-                        <div className="flex justify-between items-center px-2">
-                            <h5 className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-600">Active Stations</h5>
-                            <span className="text-[10px] font-mono text-emerald-500">{hubs.length} Hubs</span>
-                        </div>
-                        <div className="space-y-2">
-                            {hubs.map((hub) => (
-                                <div key={hub.id} className="p-3 bg-zinc-900/30 border border-zinc-800/50 rounded-xl">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <span className="text-[10px] font-bold text-zinc-200">{hub.name}</span>
-                                        <div className="flex items-center gap-1 text-[8px] text-zinc-500 font-mono">
-                                            <MapPin size={8} /> {hub.location}
+                        {selectedIncident ? (
+                            <div className="p-4 bg-zinc-950/60 border border-white/10 rounded-[2rem] space-y-4 backdrop-blur-md animate-in slide-in-from-bottom-2 duration-300">
+                                <div className="flex justify-between items-start border-b border-white/5 pb-3">
+                                    <div className="space-y-1">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[10px] font-mono font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">
+                                                {selectedIncident.id}
+                                            </span>
+                                            <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                                                selectedIncident.status === 'RESOLVED' || selectedIncident.status === 'CONFIRMED'
+                                                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+                                                    : selectedIncident.status === 'RETRACTED'
+                                                        ? 'bg-zinc-800 border-zinc-700 text-zinc-400'
+                                                        : 'bg-red-500/10 border-red-500/20 text-red-400 animate-pulse'
+                                            }`}>
+                                                {selectedIncident.status || 'ACTIVE'}
+                                            </span>
+                                        </div>
+                                        <h4 className="text-[12px] font-black text-white uppercase tracking-tight flex items-center gap-1.5 mt-1">
+                                            <MapPin size={10} className="text-zinc-500" /> {selectedIncident.location?.landmark || 'Karachi Sector'}
+                                        </h4>
+                                    </div>
+                                    <button 
+                                        onClick={() => setSelectedIncident(null)} 
+                                        className="text-zinc-500 hover:text-white text-[9px] bg-white/5 w-5 h-5 rounded-full flex items-center justify-center border border-white/5"
+                                        title="Close details"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+
+                                {/* Human-in-the-loop Verdict Banners */}
+                                {selectedIncident.status === 'RETRACTED' && (
+                                    <div className="p-3 bg-zinc-500/10 border border-zinc-500/20 rounded-2xl space-y-1">
+                                        <span className="text-[7px] text-zinc-400 uppercase font-black tracking-widest block">Command Retraction Alert</span>
+                                        <p className="text-[10px] text-zinc-300 font-bold leading-snug">
+                                            Alert retracted and units recalled. Reason:
+                                        </p>
+                                        <p className="text-[9px] text-zinc-400 font-mono italic leading-relaxed">
+                                            "{selectedIncident.data?.retraction_reason || 'False Alarm / Sensor Mismatch'}"
+                                        </p>
+                                    </div>
+                                )}
+
+                                {selectedIncident.status === 'CONFIRMED' && (
+                                    <div className="p-3 bg-orange-500/10 border border-orange-500/20 rounded-2xl space-y-1">
+                                        <span className="text-[7px] text-orange-400 uppercase font-black tracking-widest block">Ground-Truth Verified</span>
+                                        <p className="text-[10px] text-orange-200 font-bold leading-snug">
+                                            Crisis confirmed live by field officer. Note:
+                                        </p>
+                                        <p className="text-[9px] text-orange-300 font-mono italic leading-relaxed">
+                                            "{selectedIncident.data?.officer_note || 'Crisis confirmed live. Deploying assets.'}"
+                                        </p>
+                                    </div>
+                                )}
+
+                                {selectedIncident.status === 'INVESTIGATING' && (
+                                    <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-2xl space-y-1 animate-pulse">
+                                        <span className="text-[7px] text-blue-400 uppercase font-black tracking-widest block">Field Quest Active</span>
+                                        <p className="text-[10px] text-blue-200 font-bold leading-snug">
+                                            First responder is currently en route to investigate ground-reality.
+                                        </p>
+                                    </div>
+                                )}
+
+                                <div className="space-y-2 text-[10px]">
+                                    <div className="p-3 bg-white/[0.02] border border-white/5 rounded-2xl">
+                                        <span className="text-[7px] text-zinc-500 uppercase font-black block mb-1">Raw Signal Description</span>
+                                        <p className="text-zinc-300 italic font-medium leading-relaxed">
+                                            "{selectedIncident.signal_text || 'No description provided.'}"
+                                        </p>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-2.5 space-y-0.5">
+                                            <span className="text-[7px] text-zinc-500 uppercase font-black block">Triage Priority</span>
+                                            <span className="text-red-400 font-mono font-black">Level 8</span>
+                                        </div>
+                                        <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-2.5 space-y-0.5">
+                                            <span className="text-[7px] text-zinc-500 uppercase font-black block">Assigned Support</span>
+                                            <span className="text-zinc-300 font-bold uppercase truncate block">{selectedIncident.department?.replace('_', ' ') || 'FIRE BRIGADE'}</span>
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-3 gap-2">
-                                        <Stat mini label="Trk" value={hub.trucks} />
-                                        <Stat mini label="Amb" value={hub.ambulances} />
-                                        <Stat mini label="Off" value={hub.officers} />
-                                    </div>
                                 </div>
-                            ))}
-                        </div>
+
+                                <div className="space-y-2 border-t border-white/5 pt-3">
+                                    <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest block ml-1">Auditor Agent Controls</span>
+                                    
+                                    <div className="flex gap-2">
+                                        <button
+                                            disabled={isSaving || selectedIncident.status === 'CONFIRMED' || selectedIncident.status === 'RETRACTED'}
+                                            onClick={() => handleAuditorAction('FALSE_ALARM')}
+                                            className="flex-1 py-2.5 bg-red-950/20 border border-red-500/20 hover:border-red-500/50 text-red-400 hover:bg-red-500/10 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all disabled:opacity-40"
+                                        >
+                                            False Alarm
+                                        </button>
+                                        <button
+                                            disabled={isSaving || selectedIncident.status === 'CONFIRMED' || selectedIncident.status === 'RETRACTED'}
+                                            onClick={() => handleAuditorAction('ROAD_CLEAR')}
+                                            className="flex-1 py-2.5 bg-zinc-900 border border-white/10 hover:bg-zinc-800 text-zinc-300 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all disabled:opacity-40"
+                                        >
+                                            Road Clear
+                                        </button>
+                                    </div>
+
+                                    <button
+                                        disabled={isSaving || selectedIncident.status === 'CONFIRMED' || selectedIncident.status === 'RETRACTED'}
+                                        onClick={() => handleAuditorAction('CONFIRM')}
+                                        className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[9px] font-black uppercase tracking-[0.1em] transition-all shadow-lg shadow-emerald-950/30 flex items-center justify-center gap-1.5 disabled:opacity-40"
+                                    >
+                                        Confirm Crisis
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <>
+                                <div className="flex justify-between items-center px-2">
+                                    <h5 className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-600">Active Stations</h5>
+                                    <span className="text-[10px] font-mono text-emerald-500">{hubs.length} Hubs</span>
+                                </div>
+                                <div className="space-y-2">
+                                    {hubs.map((hub) => (
+                                        <div key={hub.id} className="p-3 bg-zinc-900/30 border border-zinc-800/50 rounded-xl">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <span className="text-[10px] font-bold text-zinc-200">{hub.name}</span>
+                                                <div className="flex items-center gap-1 text-[8px] text-zinc-500 font-mono">
+                                                    <MapPin size={8} /> {hub.location}
+                                                </div>
+                                            </div>
+                                            <div className="grid grid-cols-3 gap-2">
+                                                <Stat mini label="Trk" value={hub.trucks} />
+                                                <Stat mini label="Amb" value={hub.ambulances} />
+                                                <Stat mini label="Off" value={hub.officers} />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </>
+                        )}
                     </div>
                 ) : view === 'guidance' ? (
                     <div className="flex-1 flex flex-col h-full overflow-hidden">

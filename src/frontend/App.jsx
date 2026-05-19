@@ -14,6 +14,29 @@ import SovereignIntelligence from './components/SovereignIntelligence';
 import SovereignLogin from './components/SovereignLogin';
 import CrisisExplorer from './components/CrisisExplorer';
 
+const resolveHotspotCoordinates = (locationName) => {
+  const name = (locationName || "").toLowerCase();
+  if (name.includes("nipa") || name.includes("gulshan")) {
+    return { lng: 67.09, lat: 24.92 };
+  }
+  if (name.includes("saddar")) {
+    return { lng: 67.03, lat: 24.86 };
+  }
+  if (name.includes("clifton")) {
+    return { lng: 67.04, lat: 24.81 };
+  }
+  if (name.includes("defence") || name.includes("dha")) {
+    return { lng: 67.06, lat: 24.82 };
+  }
+  if (name.includes("karsaz")) {
+    return { lng: 67.07, lat: 24.88 };
+  }
+  const hash = name.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  const offsetLng = ((hash % 100) / 1000) - 0.05;
+  const offsetLat = (((hash >> 2) % 100) / 1000) - 0.05;
+  return { lng: 67.05 + offsetLng, lat: 24.89 + offsetLat };
+};
+
 function App() {
   const [user, setUser] = useState(null); // AUTH STATE
   const [traces, setTraces] = useState([]);
@@ -49,6 +72,53 @@ function App() {
     fetchStats();
   }, [activeDept, incidents]);
 
+  useEffect(() => {
+    const fetchIncidentsAndTraces = async () => {
+      try {
+        const res = await fetch('http://127.0.0.1:3001/api/incidents');
+        const dbIncidents = await res.json();
+        if (Array.isArray(dbIncidents)) {
+          const mappedIncidents = dbIncidents.map(inc => {
+            const landmarkName = inc.location || 'NIPA Chowrangi';
+            const coords = resolveHotspotCoordinates(landmarkName);
+            return {
+              id: inc.incident_id,
+              department: inc.type === 'FIRE' ? 'FIRE_BRIGADE' : 'KMC_HEALTH',
+              type: inc.type?.toLowerCase() || 'urban_flood',
+              location: { 
+                landmark: landmarkName,
+                lng: coords.lng,
+                lat: coords.lat
+              },
+              status: inc.status,
+              signal_text: inc.description || (inc.data && inc.data.raw_input),
+              created_at: inc.created_at,
+              data: inc.data
+            };
+          });
+          setIncidents(mappedIncidents);
+
+          const extractedTraces = [];
+          dbIncidents.forEach(inc => {
+            if (inc.data && Array.isArray(inc.data.traceLogs)) {
+              inc.data.traceLogs.forEach(log => {
+                extractedTraces.push({
+                  incidentId: inc.incident_id,
+                  log: { ...log, timestamp: log.timestamp || (inc.created_at ? new Date(inc.created_at).getTime() : Date.now()) },
+                  department: inc.type === 'FIRE' ? 'FIRE_BRIGADE' : 'KMC_HEALTH'
+                });
+              });
+            }
+          });
+          setTraces(extractedTraces);
+        }
+      } catch (e) {
+        console.error("Failed to fetch historical incidents:", e);
+      }
+    };
+    fetchIncidentsAndTraces();
+  }, []);
+
   const departments = {
     'KMC_HEALTH': { name: 'KMC Health & Infra', color: 'text-emerald-500' },
     'POLICE_FORCE': { name: 'Sindh Police Force', color: 'text-blue-500' },
@@ -68,20 +138,78 @@ function App() {
         
         setTraces(prev => [...prev, { 
           incidentId: data.incidentId, 
-          log: data.log, 
+          log: { ...data.log, timestamp: data.log.timestamp || Date.now() }, 
           department: data.assigned_department 
         }]);
 
         if (data.log.agent === 'The Sentinel' && data.log.outcome === 'Success') {
+          const landmarkName = data.log.message.split('at ')[1]?.replace('.', '') || 'NIPA Chowrangi';
+          const coords = resolveHotspotCoordinates(landmarkName);
           setIncidents(prev => [...prev, {
             id: data.incidentId,
             department: data.assigned_department,
             type: data.log.message.includes('fire') ? 'fire' : 'urban_flood',
-            location: { landmark: data.log.message.split('at ')[1]?.replace('.', '') || 'NIPA Chowrangi' }
+            location: { 
+              landmark: landmarkName,
+              lng: coords.lng,
+              lat: coords.lat
+            },
+            status: 'ACTIVE'
           }]);
         }
-        if (data.log.agent === 'The Auditor' && data.log.outcome === 'Crisis Resolved') {
-          setLivesSaved(prev => prev + Math.floor(Math.random() * 50) + 20);
+
+        // Live Incident Status Synchronizer (Field Officer & Auditor Actions)
+        if (data.log.agent === 'The Auditor') {
+          const isRetracted = data.log.message.includes('RETRACTED') || data.log.message.includes('retract') || data.log.message.includes('RETRACT');
+          const isConfirmed = data.log.message.includes('CONFIRMED') || data.log.message.includes('confirm') || data.log.message.includes('CONFIRM');
+          const isResolved = data.log.outcome === 'Crisis Resolved' || data.log.message.includes('Resolved') || data.log.message.includes('resolved');
+          const newStatus = isRetracted ? 'RETRACTED' : (isConfirmed ? 'CONFIRMED' : (isResolved ? 'RESOLVED' : 'ACTIVE'));
+          
+          setIncidents(prevIncidents => prevIncidents.map(inc => 
+            inc.id === data.incidentId 
+              ? { 
+                  ...inc, 
+                  status: newStatus,
+                  data: {
+                    ...inc.data,
+                    retraction_reason: isRetracted ? data.log.message.split('confirms ')[1]?.replace('.', '') : inc.data?.retraction_reason,
+                    officer_note: isConfirmed ? data.log.message.split('confirms ')[1]?.replace('.', '') : inc.data?.officer_note
+                  }
+                } 
+              : inc
+          ));
+
+          setSelectedIncident(prevSelected => {
+            if (prevSelected && prevSelected.id === data.incidentId) {
+              return { 
+                ...prevSelected, 
+                status: newStatus,
+                data: {
+                  ...prevSelected.data,
+                  retraction_reason: isRetracted ? data.log.message.split('confirms ')[1]?.replace('.', '') : prevSelected.data?.retraction_reason,
+                  officer_note: isConfirmed ? data.log.message.split('confirms ')[1]?.replace('.', '') : prevSelected.data?.officer_note
+                }
+              };
+            }
+            return prevSelected;
+          });
+
+          if (isResolved) {
+            setLivesSaved(prev => prev + Math.floor(Math.random() * 50) + 20);
+          }
+        }
+
+        if (data.log.agent === 'The TruthEngine' || data.log.agent === 'The Truth-Engine') {
+          setIncidents(prevIncidents => prevIncidents.map(inc => 
+            inc.id === data.incidentId ? { ...inc, status: 'INVESTIGATING' } : inc
+          ));
+
+          setSelectedIncident(prevSelected => {
+            if (prevSelected && prevSelected.id === data.incidentId) {
+              return { ...prevSelected, status: 'INVESTIGATING' };
+            }
+            return prevSelected;
+          });
         }
       }
       if (data.type === 'COMMUNICATION_ALERT') setLatestAlert(data.data);
@@ -138,7 +266,7 @@ function App() {
         
         {/* Left: Sovereign Sidebar (Asset Management) */}
         <div 
-          className="absolute left-0 top-0 bottom-0 z-40 transition-all duration-500 ease-in-out overflow-hidden"
+          className="absolute left-0 top-0 bottom-0 z-40 transition-all duration-500 ease-in-out overflow-visible"
           style={{ width: sidebarOpen ? '288px' : '64px', paddingTop: '56px' }}
         >
           <SovereignSidebar 
@@ -152,6 +280,8 @@ function App() {
             user={user}
             sidebarOpen={sidebarOpen}
             setSidebarOpen={setSidebarOpen}
+            selectedIncident={selectedIncident}
+            setSelectedIncident={setSelectedIncident}
           />
         </div>
 
@@ -225,9 +355,11 @@ function App() {
         </div>
 
         {/* Right: Tactical Feed (Agent Intelligence) */}
-        <div className="w-[320px] h-full bg-black/10 backdrop-blur-3xl border-l border-white/5 z-40" style={{ paddingTop: '56px' }}>
-          <AgentTraceTerminal traces={filteredTraces} />
-        </div>
+        {dashboardView === 'TACTICAL' && (
+          <div className="w-[320px] h-full bg-black/10 backdrop-blur-3xl border-l border-white/5 z-40 animate-in slide-in-from-right duration-500" style={{ paddingTop: '56px' }}>
+            <AgentTraceTerminal traces={filteredTraces} />
+          </div>
+        )}
 
       </div>
 
