@@ -18,18 +18,20 @@ export const get_city_vitals = async (location) => {
         });
         const data = await response.json();
         
-        // Adapt API response to Agent's expected format
+        // Bug 1 Fix: return avg_temp and avg_humidity directly — Truth Engine reads these fields
+        // The old nested 'weather' object was hiding them from the confidence heuristic
         return {
             location: location,
+            avg_temp: data.avg_temp,
+            avg_humidity: data.avg_humidity,
             traffic_speed_kmh: data.traffic_speed,
-            weather: {
-                rainfall_rate_mm: data.rainfall,
-                water_level_cm: data.water_level
-            }
+            rainfall_mm: data.rainfall,
+            water_level_cm: data.water_level
         };
     } catch (error) {
         console.error("Tool Error (vitals):", error);
-        return { traffic_speed_kmh: 40, weather: { rainfall_rate_mm: 0, water_level_cm: 0 } };
+        // Fallback also provides correct field names
+        return { location, avg_temp: 30, avg_humidity: 65, traffic_speed_kmh: 40, rainfall_mm: 0, water_level_cm: 0 };
     }
 };
 
