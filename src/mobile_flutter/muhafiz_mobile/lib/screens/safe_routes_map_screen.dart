@@ -160,6 +160,9 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with TickerPr
         // Sort by distance — nearest first
         mappedList.sort((a, b) => (a['dist'] as double).compareTo(b['dist'] as double));
 
+        // Spread overlapping markers so they don't stack on top of each other
+        _spreadOverlaps(mappedList);
+
         setState(() {
           _activeCrises = mappedList;
           _isLoading = false;
@@ -229,34 +232,57 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with TickerPr
   }
 
   void _calculateEvacuationRoute() {
-    // Generate green bypass points avoiding threat circles
-    List<LatLng> points = [_citizenLatLng];
-    
-    // Add intermediates to bypass known crises dynamically
-    LatLng current = _citizenLatLng;
-    LatLng target = _safeHubLatLng;
+    final LatLng start = _citizenLatLng;
+    final LatLng end = _safeHubLatLng;
+    final List<LatLng> points = [start];
 
-    // Simple routing bypass algorithm around the nearest active crisis
-    if (_activeCrises.isNotEmpty) {
-      for (final crisis in _activeCrises) {
-        final LatLng crisisCoord = crisis['coordinate'] as LatLng;
-        final double dist = _distanceBetween(current, crisisCoord);
-        if (dist < 800) {
-          // Dodge threat by creating a safe midpoint offset
-          final double avgLat = (current.latitude + target.latitude) / 2;
-          final double avgLng = (current.longitude + target.longitude) / 2;
-          // Offset slightly away from threat
-          final double offsetLat = avgLat + 0.004;
-          final double offsetLng = avgLng - 0.003;
-          points.add(LatLng(offsetLat, offsetLng));
-        }
+    // Check every crisis: if the straight line passes within (radius + 200m) buffer, add a bypass waypoint
+    for (final crisis in _activeCrises) {
+      final LatLng c = crisis['coordinate'] as LatLng;
+      final double buffer = (crisis['radius'] as double? ?? 300) + 200;
+
+      // Find the closest point on the start→end segment to this crisis
+      final LatLng closest = _closestPointOnSegment(start, end, c);
+      final double proximity = _distanceBetween(closest, c);
+
+      if (proximity < buffer) {
+        // Perpendicular offset: push waypoint away from crisis
+        // Direction vector of route
+        final double dx = end.longitude - start.longitude;
+        final double dy = end.latitude - start.latitude;
+        final double len = math.sqrt(dx * dx + dy * dy);
+        // Perpendicular (rotated 90°)
+        final double perpX = -dy / len;
+        final double perpY = dx / len;
+
+        // Which side of the route is the crisis on? Use cross product sign
+        final double crossZ = (end.longitude - start.longitude) * (c.latitude - start.latitude) -
+            (end.latitude - start.latitude) * (c.longitude - start.longitude);
+        // Push waypoint to the OPPOSITE side from the crisis
+        final double side = crossZ > 0 ? -1.0 : 1.0;
+        final double nudge = (buffer - proximity) / 111320.0 + 0.003; // degrees
+
+        final double waypointLat = closest.latitude + perpY * nudge * side;
+        final double waypointLng = closest.longitude + perpX * nudge * side;
+        points.add(LatLng(waypointLat, waypointLng));
       }
     }
 
-    points.add(target);
-    setState(() {
-      _routePoints = points;
-    });
+    points.add(end);
+    setState(() => _routePoints = points);
+  }
+
+  /// Returns the closest point on segment [a→b] to point [p]
+  LatLng _closestPointOnSegment(LatLng a, LatLng b, LatLng p) {
+    final double ax = a.longitude, ay = a.latitude;
+    final double bx = b.longitude, by = b.latitude;
+    final double px = p.longitude, py = p.latitude;
+    final double dx = bx - ax, dy = by - ay;
+    final double lenSq = dx * dx + dy * dy;
+    if (lenSq == 0) return a;
+    final double t = ((px - ax) * dx + (py - ay) * dy) / lenSq;
+    final double tc = t.clamp(0.0, 1.0);
+    return LatLng(ay + tc * dy, ax + tc * dx);
   }
 
   double _distanceBetween(LatLng p1, LatLng p2) {
@@ -283,6 +309,28 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with TickerPr
         MuhafizFeedback.showToast("Optimal Green Route Recalculated");
       }
     });
+  }
+
+  void _spreadOverlaps(List<Map<String, dynamic>> list) {
+    const double minSep = 0.006; // ~660m in degrees
+    for (int i = 0; i < list.length; i++) {
+      for (int j = i + 1; j < list.length; j++) {
+        final LatLng a = list[i]['coordinate'] as LatLng;
+        final LatLng b = list[j]['coordinate'] as LatLng;
+        final double dLat = b.latitude - a.latitude;
+        final double dLng = b.longitude - a.longitude;
+        final double dist = math.sqrt(dLat * dLat + dLng * dLng);
+        if (dist < minSep) {
+          // Push j away from i along a deterministic angle based on index
+          final double angle = (j * math.pi * 2) / list.length;
+          final double push = (minSep - dist) / 2 + 0.003;
+          list[j]['coordinate'] = LatLng(
+            b.latitude + math.sin(angle) * push,
+            b.longitude + math.cos(angle) * push,
+          );
+        }
+      }
+    }
   }
 
   Color _typeColor(String type) {
