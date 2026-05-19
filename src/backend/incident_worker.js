@@ -1,36 +1,34 @@
 import { getPendingIncidents, updateIncidentState } from './db/index.js';
 import { runSovereignLogic } from './sovereign_logic.js';
-import dotenv from 'dotenv';
 
-dotenv.config();
+const _processing = new Set();
 
-async function startWorker() {
+export async function startIncidentWorker() {
     console.log("=========================================");
     console.log("Muhafiz-X: Real-time Incident Worker Active");
-    console.log("Monitoring Neon DB for Sovereign Events...");
+    console.log("Monitoring DB for Sovereign Events...");
     console.log("=========================================");
 
-    while (true) {
+    const poll = async () => {
         try {
             const pending = await getPendingIncidents();
+            const fresh = pending.filter(inc => !_processing.has(inc.incident_id));
 
-            if (pending.length > 0) {
-                console.log(`[Worker] Detected ${pending.length} new event(s). Wake up agents!`);
-
-                for (const incident of pending) {
+            if (fresh.length > 0) {
+                console.log(`[Worker] ${fresh.length} new event(s) detected.`);
+                for (const incident of fresh) {
                     const { incident_id, data } = incident;
-                    const input = data.raw_input || "No input provided";
-
+                    _processing.add(incident_id);
                     await updateIncidentState(incident_id, 'PROCESSING', data);
-                    runSovereignLogic(incident_id, input);
+                    runSovereignLogic(incident_id, data?.raw_input || 'No input provided')
+                        .finally(() => _processing.delete(incident_id));
                 }
             }
         } catch (error) {
-            console.error("[Worker] Error polling events:", error.message);
+            console.error("[Worker] Poll error:", error.message);
         }
+        setTimeout(poll, 3000);
+    };
 
-        await new Promise(resolve => setTimeout(resolve, 3000));
-    }
+    poll();
 }
-
-startWorker();

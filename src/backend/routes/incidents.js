@@ -7,7 +7,32 @@ const router = Router();
 
 router.get('/', async (req, res) => {
     try {
-        res.json(await getAllIncidents(20));
+        const raw = await getAllIncidents(20);
+        const normalized = raw.map(inc => {
+            const d = inc.data || {};
+            const cls = d.classification || {};
+            const actionPlan = d.action_plan || {};
+            const impact = d.impact_analysis || {};
+            return {
+                ...inc,
+                // Standardized confidence — pulled from wherever the agent stored it
+                confidence: cls.confidence_level ?? d.confidence_level ?? d.confidence ?? null,
+                // Resolved type and location from nested classification if top-level is blank
+                type: (inc.type && inc.type !== 'UNKNOWN') ? inc.type : (cls.type || 'UNKNOWN'),
+                location: (inc.location && inc.location !== 'ANALYZING')
+                    ? inc.location
+                    : (cls.location?.landmark || d.location || 'ANALYZING'),
+                // Surface useful agent outputs to top level for Flutter apps
+                instructions: actionPlan.tactical_directive || null,
+                equipment: Array.isArray(actionPlan.deployment?.units)
+                    ? actionPlan.deployment.units.join(', ')
+                    : null,
+                analyst_prediction: impact.spread_prediction
+                    ? `${impact.spread_prediction} spread · ${impact.affected_population ?? '?'} affected · ${impact.estimated_duration ?? '?'}`
+                    : null,
+            };
+        });
+        res.json(normalized);
     } catch (e) {
         res.status(500).json({ error: e.message });
     }

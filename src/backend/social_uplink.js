@@ -58,6 +58,7 @@ async function pollSocialIntelligence() {
     console.log(`[OSINT] Sleeping for 10 minutes... Next scan at: ${new Date(Date.now() + POLLING_INTERVAL).toLocaleTimeString()}`);
 }
 
-// Start the Autonomous Loop
-pollSocialIntelligence();
-setInterval(pollSocialIntelligence, POLLING_INTERVAL);
+export function startSocialUplink() {
+    pollSocialIntelligence();
+    setInterval(pollSocialIntelligence, POLLING_INTERVAL);
+}

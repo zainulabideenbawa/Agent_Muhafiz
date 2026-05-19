@@ -8,7 +8,25 @@ export const setUserDirective = (directive) => {
     activeUserDirective = directive;
 };
 
-export const runSovereignLogic = async (incidentId, input) => {
+const PIPELINE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes per incident
+
+export const runSovereignLogic = (incidentId, input) => {
+    const pipeline = _runPipeline(incidentId, input);
+    const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`Pipeline timeout after 5 min`)), PIPELINE_TIMEOUT_MS)
+    );
+    return Promise.race([pipeline, timeout]).catch(async (error) => {
+        console.error(`[Sovereign] FATAL ${incidentId}: ${error.message}`);
+        await updateIncidentState(incidentId, 'FAILED', {
+            error: error.message,
+            failed_at: new Date().toISOString(),
+        });
+        broadcast({ type: 'INCIDENT_FAILED', incidentId, error: error.message });
+        return { success: false, error: error.message };
+    });
+};
+
+const _runPipeline = async (incidentId, input) => {
     console.log(`[Autonomous Logic] Initiating Agents for ${incidentId}`);
 
     try {
