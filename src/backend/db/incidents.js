@@ -1,4 +1,4 @@
-import { eq, asc } from 'drizzle-orm';
+import { eq, asc, desc } from 'drizzle-orm';
 import { db } from './connection.js';
 import { incidents } from './schema.js';
 
@@ -73,7 +73,7 @@ export const getPendingIncidents = async () => {
     try {
         return await db.select().from(incidents)
             .where(eq(incidents.status, 'PENDING'))
-            .orderBy(asc(incidents.created_at));
+            .orderBy(desc(incidents.created_at));
     } catch (e) {
         console.error("DB getPendingIncidents Failed:", e);
         throw e;
@@ -83,7 +83,7 @@ export const getPendingIncidents = async () => {
 export const getAllIncidents = async (limit = 20) => {
     try {
         const results = await db.select().from(incidents)
-            .orderBy(asc(incidents.created_at))
+            .orderBy(desc(incidents.created_at))
             .limit(limit);
         return results;
     } catch (e) {

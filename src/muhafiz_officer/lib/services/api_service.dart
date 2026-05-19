@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  static const String _macLanIp = '192.168.18.4';
+  static const String _macLanIp = '192.168.18.63';
   static final String _host = Platform.isAndroid ? '10.0.2.2' : _macLanIp;
   static final String baseUrl = 'http://$_host:3001/api';
   static String get wsUrl => 'ws://$_host:3001';

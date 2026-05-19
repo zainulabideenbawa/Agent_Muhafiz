@@ -335,12 +335,11 @@ function App() {
             dashboardView={dashboardView}
             setDashboardView={setDashboardView}
             user={user}
-            onLogout={handleLogout}
+            onLogout={() => handleLogin(null)}
             sidebarOpen={sidebarOpen}
             setSidebarOpen={setSidebarOpen}
             selectedIncident={selectedIncident}
             setSelectedIncident={setSelectedIncident}
-            onLogout={() => handleLogin(null)}
           />
         </div>
 

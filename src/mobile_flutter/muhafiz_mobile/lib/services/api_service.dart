@@ -8,7 +8,7 @@ class ApiService {
   // For iOS Simulator: '127.0.0.1'
   // For Physical iPhone on same WiFi: use Mac's LAN IP (run `ipconfig getifaddr en0`)
   // For Android Emulator: '10.0.2.2'
-  static const String _macLanIp = '192.168.18.4';
+  static const String _macLanIp = '192.168.18.63';
   static final String _host = Platform.isAndroid ? '10.0.2.2' : _macLanIp;
   static final String _baseUrl = 'http://$_host:3001/api';
 
