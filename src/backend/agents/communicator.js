@@ -24,18 +24,23 @@ export const communicator = async (state) => {
     const type = (classification?.type || 'emergency').toLowerCase();
     const dept = (assigned_department || 'Emergency Services').replace(/_/g, ' ');
 
+    // Pull real TomTom ETA and hub from Strategist's output if available
+    const etaMins = state.action_plan?.deployment?.eta_mins || 14;
+    const deployedHub = state.action_plan?.deployment?.hub || 'Central Hub';
+    const deptEmoji = type.includes('fire') ? '🔥' : type.includes('flood') ? '🌊' : '🚑';
+
     const dynamicFallback = {
         scope: classification?.urgency >= 8 ? 'GLOBAL' : 'LOCAL',
         radius_km: classification?.urgency >= 8 ? 15 : 5,
         push_notification: {
-            en: `⚠️ ${type.toUpperCase()} alert at ${loc}. ${dept} units deployed. Stay clear of the area.`,
-            ur: `⚠️ ${loc} mein ${type} ki surat-e-haal. ${dept} rawana ho gaye. علاقہ خالی کریں۔`
+            en: `${deptEmoji} ${type.toUpperCase()} alert at ${loc}. ${dept} units deployed. ETA ${etaMins} min. Stay clear.`,
+            ur: `${deptEmoji} ${loc} mein ${type} ki surat-e-haal. ${dept} rawana — ETA ${etaMins} منٹ۔ علاقہ خالی کریں۔`
         },
         whatsapp_draft: {
-            en: `🚨 MUHAFIZ-X ALERT\nIncident: ${type.toUpperCase()}\nLocation: ${loc}\nResponse: ${dept} units are en route.\nEstimated response: 14 mins\nStay safe and follow official instructions.`,
-            ur: `🚨 محافظ-X الرٹ\nواقعہ: ${type}\nمقام: ${loc}\nجواب: ${dept} روانہ ہو چکے ہیں۔\nمحفوظ رہیں۔`
+            en: `🚨 MUHAFIZ-X SOVEREIGN ALERT\nIncident: ${type.toUpperCase()}\nLocation: ${loc}\nResponse: ${dept} units dispatched from ${deployedHub}.\nEstimated arrival: ${etaMins} min (TomTom live routing)\nStay safe and follow official instructions.`,
+            ur: `🚨 محافظ-X الرٹ\nواقعہ: ${type.toUpperCase()}\nمقام: ${loc}\nجواب: ${dept} ${deployedHub} سے روانہ — ETA ${etaMins} منٹ\nمحفوظ رہیں اور ہدایات پر عمل کریں۔`
         },
-        mayor_brief: `Mayor, a ${type} incident has been confirmed at ${loc}. ${dept} has been deployed with an estimated ETA of 14 minutes. Situation is being monitored.`
+        mayor_brief: `Mayor, a ${type} incident has been confirmed at ${loc}. ${dept} has been deployed from ${deployedHub} with a live TomTom-calculated ETA of ${etaMins} minutes. Situation under autonomous monitoring.`
     };
 
     try {

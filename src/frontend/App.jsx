@@ -38,7 +38,27 @@ const resolveHotspotCoordinates = (locationName) => {
 };
 
 function App() {
-  const [user, setUser] = useState(null); // AUTH STATE
+  const [user, setUser] = useState(() => {
+    try {
+      const stored = localStorage.getItem('muhafiz_user');
+      return stored ? JSON.parse(stored) : null;
+    } catch { return null; }
+  });
+
+  const handleLogin = (newUser) => {
+    setUser(newUser);
+    if (newUser) localStorage.setItem('muhafiz_user', JSON.stringify(newUser));
+    else localStorage.removeItem('muhafiz_user');
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('muhafiz_user');
+    setUser(null);
+    setIncidents([]);
+    setTraces([]);
+    setResolutionAlert(null);
+    setLatestAlert(null);
+  };
   const [traces, setTraces] = useState([]);
   const [isSimulating, setIsSimulating] = useState(false);
   const [ws, setWs] = useState(null);
@@ -304,7 +324,8 @@ function App() {
     } catch (error) { console.error(error); } finally { setIsSimulating(false); }
   };
 
-  if (!user) return <SovereignLogin onLogin={setUser} />;
+  if (!user) return <SovereignLogin onLogin={handleLogin} />;
+
 
   return (
     <div className="h-screen w-screen sovereign-bg overflow-hidden flex flex-col font-sans text-zinc-300">

@@ -1,5 +1,161 @@
 [
   {
+    "incident_id": "MHFZ-2718",
+    "type": "FLOOD",
+    "location": "Liaquatabad",
+    "status": "RESOLVED",
+    "description": "Severe flooding reported at Liaquatabad Underpass, multiple vehicles submerged",
+    "data": {
+      "raw_input": "Severe flooding reported at Liaquatabad Underpass, multiple vehicles submerged",
+      "traceLogs": [
+        {
+          "timestamp": "2026-05-19T17:23:41.521Z",
+          "agent": "The Dispatcher",
+          "message": "Routed to KMC_HEALTH. Triage: Level 7 [INFRASTRUCTURE]. Reasoning: Heuristic parsing detected crisis key terms in input matching department KMC_HEALTH.",
+          "outcome": "Routed & Triaged",
+          "details": {
+            "threat_level": 7,
+            "category": "INFRASTRUCTURE",
+            "department": "KMC_HEALTH",
+            "immediate_action": "Dispatched immediate units from KMC_HEALTH to address the incident.",
+            "reasoning": "Heuristic parsing detected crisis key terms in input matching department KMC_HEALTH."
+          }
+        },
+        {
+          "timestamp": "2026-05-19T17:23:43.171Z",
+          "agent": "The Sentinel",
+          "message": "Actionable flood detected at Liaquatabad via App.",
+          "outcome": "Success",
+          "source": "APP",
+          "details": {
+            "is_crisis": true,
+            "type": "flood",
+            "location": {
+              "landmark": "Liaquatabad",
+              "lat": 24.9029771,
+              "lng": 67.0386279
+            },
+            "urgency": 7,
+            "reasoning": "Heuristically evaluated input: crisis=true, location matched=Liaquatabad."
+          }
+        },
+        {
+          "timestamp": "2026-05-19T17:23:46.627Z",
+          "agent": "The Truth-Engine",
+          "message": "Verified against Liaquatabad telemetry. Confidence: 0.98.",
+          "outcome": "Verified"
+        },
+        {
+          "timestamp": "2026-05-19T17:23:47.876Z",
+          "agent": "The Analyst",
+          "message": "Predicted spread. Infrastructure risk: Sewerage Line, Underpass Highway, Abbasi Shaheed Hospital.",
+          "outcome": "Success"
+        },
+        {
+          "timestamp": "2026-05-19T17:23:52.685Z",
+          "agent": "The Strategist",
+          "message": "TACTICAL DIRECTIVE: Water Suction Pump, Emergency Excavator dispatched from Gulshan Hub. ETA: 7 mins. All units from Gulshan Hub ordered to converge on Liaquatabad immediately. ETA: 7 min (TomTom live). TomTom traffic-aware route active. Establish 200m exclusion zone on arrival.",
+          "outcome": "Plan Locked",
+          "details": {
+            "priority_level": "CRITICAL",
+            "deployment": {
+              "hub": "Gulshan Hub",
+              "units": [
+                "Water Suction Pump",
+                "Emergency Excavator"
+              ],
+              "eta_mins": 7
+            },
+            "tactical_directive": "All units from Gulshan Hub ordered to converge on Liaquatabad immediately. ETA: 7 min (TomTom live). TomTom traffic-aware route active. Establish 200m exclusion zone on arrival.",
+            "inter_agency_coordination": "COORDINATE with KFB Fire Units & Traffic Police for joint response. KMC Traffic Control alerted.",
+            "reasoning": "Deployed Water Suction Pump & Emergency Excavator from \"Gulshan Hub\". TomTom routing: 7 min (TomTom live) to Liaquatabad."
+          }
+        },
+        {
+          "timestamp": "2026-05-19T17:23:52.927Z",
+          "agent": "The Oracle",
+          "message": "Plan approved via virtual rehearsal.",
+          "outcome": "Approved"
+        },
+        {
+          "timestamp": "2026-05-19T17:24:07.138Z",
+          "agent": "The Communicator",
+          "message": "Alert Scoped as LOCAL (2km). Push and WhatsApp drafts ready.",
+          "outcome": "Success"
+        },
+        {
+          "timestamp": "2026-05-19T17:24:07.644Z",
+          "agent": "The Auditor",
+          "message": "Mission RESOLVED. Performance: 85%. Policy: Increase sensor density in flood-prone areas.",
+          "outcome": "Crisis Resolved"
+        }
+      ],
+      "signal": {
+        "source": "APP"
+      },
+      "user_directive": null,
+      "metadata": {
+        "source_reliability": 0.98
+      },
+      "assigned_department": "KMC_HEALTH",
+      "incident_id": "MHFZ-2718",
+      "classification": {
+        "confidence_level": 0.98,
+        "verification_sources": [
+          "City Telemetry Grid",
+          "Sensors Hub",
+          "Twitter OSINT Verification"
+        ],
+        "verdict": "Verified"
+      },
+      "impact_analysis": {
+        "estimated_duration": "4 hours",
+        "affected_population": 18000,
+        "critical_infrastructure_risk": [
+          "Sewerage Line",
+          "Underpass Highway",
+          "Abbasi Shaheed Hospital"
+        ],
+        "spread_prediction": "critical",
+        "reasoning": "Predicted critical spread over 4 hours affecting 18000 citizens at Liaquatabad. Proximity alerts issued for Sewerage Line & Underpass Highway & Abbasi Shaheed Hospital. Open-Meteo 6h forecast: 0mm total rainfall — Flood risk: LOW."
+      },
+      "action_plan": {
+        "priority_level": "CRITICAL",
+        "deployment": {
+          "hub": "Gulshan Hub",
+          "units": [
+            "Water Suction Pump",
+            "Emergency Excavator"
+          ],
+          "eta_mins": 7
+        },
+        "tactical_directive": "All units from Gulshan Hub ordered to converge on Liaquatabad immediately. ETA: 7 min (TomTom live). TomTom traffic-aware route active. Establish 200m exclusion zone on arrival.",
+        "inter_agency_coordination": "COORDINATE with KFB Fire Units & Traffic Police for joint response. KMC Traffic Control alerted.",
+        "reasoning": "Deployed Water Suction Pump & Emergency Excavator from \"Gulshan Hub\". TomTom routing: 7 min (TomTom live) to Liaquatabad."
+      },
+      "simulation": {
+        "success_probability": 0.88,
+        "simulation_log": "Heuristic simulation passed.",
+        "approved": true
+      },
+      "communication": {
+        "scope": "LOCAL",
+        "radius_km": 2,
+        "push_notification": {
+          "en": "Flood Alert: Liaquatabad. Avoid the area. If nearby, stay indoors or move to higher ground. Follow official updates from Muhafiz-X.",
+          "ur": "سیلاب کا انتباہ: لیاقت آباد۔ علاقے سے گریز کریں۔ اگر قریب ہیں تو گھر میں رہیں یا اونچی جگہ پر جائیں۔ محافظ-X کی سرکاری اپڈیٹس کی پیروی کریں۔"
+        },
+        "whatsapp_draft": {
+          "en": "**🚨 Urgent Flood Alert: Liaquatabad 🚨**\n\nDear Residents,\n\nThis is an urgent announcement from Muhafiz-X. Due to heavy rainfall, severe localized flooding has been reported in Liaquatabad.\n\n**Immediate Actions Required:**\n*   **Avoid the Area:** All non-essential travel to and through Liaquatabad is strongly discouraged until further notice.\n*   **Prioritize Safety:** If you are currently in Liaquatabad or its vicinity, please prioritize your safety. Stay indoors, move to higher ground if possible, and **DO NOT** attempt to cross flooded roads or enter floodwaters.\n*   **Emergency Contact:** For flood-related emergencies or assistance, please call our helpline at **1122**.\n*   **Stay Informed:** Rely only on official channels (Muhafiz-X app, official WhatsApp, local news) for accurate updates.\n\nOur emergency response teams are on site, assessing the situation, and providing necessary assistance. Your cooperation is vital for effective response efforts.\n\nStay safe and vigilant.\n\nMuhafiz-X",
+          "ur": "**🚨 فوری سیلابی انتباہ: لیاقت آباد 🚨**\n\nعزیز رہائشیوں،\n\nیہ محافظ-X کی طرف سے ایک فوری اعلان ہے۔ شدید بارشوں کے باعث لیاقت آباد میں شدید مقامی سیلاب کی اطلاع ملی ہے۔\n\n**فوری اقدامات درکار ہیں:**\n*   **علاقے سے گریز کریں:** مزید اطلاع تک لیاقت آباد اور اس کے راستوں سے تمام غیر ضروری سفر سے سختی سے گریز کریں۔\n*   **حفاظت کو ترجیح دیں:** اگر آپ اس وقت لیاقت آباد میں یا اس کے اطراف میں ہیں، تو براہ کرم اپنی حفاظت کو ترجیح دیں۔ گھر کے اندر رہیں، اگر ممکن ہو تو اونچی جگہ پر منتقل ہوں، اور سیلاب زدہ سڑکوں کو عبور کرنے یا سیلابی پانی میں داخل ہونے کی **ہرگز** کوشش نہ کریں۔\n*   **ہنگامی رابطہ:** سیلاب سے متعلق ہنگامی صورتحال یا مدد کے لیے، براہ کرم ہماری ہیلپ لائن **1122** پر رابطہ کریں۔\n*   **باخبر رہیں:** درست اپڈیٹس کے لیے صرف سرکاری چینلز (محافظ-X ایپ، سرکاری واٹس ایپ، مقامی خبریں) پر انحصار کریں۔\n\nہماری ہنگامی ریسپانس ٹیمیں صورتحال کا جائزہ لینے اور ضروری امداد فراہم کرنے کے لیے موقع پر موجود ہیں۔ موثر جوابی کارروائی کے لیے آپ کا تعاون انتہائی اہم ہے۔\n\nمحفوظ اور چوکس رہیں۔\n\nمحافظ-X"
+        },
+        "mayor_brief": "Mayor, urgent brief: Liaquatabad is experiencing severe localized flooding due to heavy rainfall. Muhafiz-X has issued a 'LOCAL' flood alert (2km radius). Emergency teams are deployed for assessment and assistance. Residents advised to avoid the area, stay indoors, and seek higher ground. Helpline 1122 activated. Monitoring situation closely."
+      }
+    },
+    "created_at": "2026-05-19T17:23:40.298Z",
+    "last_agent": "The Auditor"
+  },
+  {
     "incident_id": "MHFZ-8252",
     "type": "FIRE",
     "location": "Nipa",
