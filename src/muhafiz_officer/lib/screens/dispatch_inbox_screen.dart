@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart' as geo;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' hide Size;
 import '../theme.dart';
 import '../services/api_service.dart';
@@ -17,6 +18,7 @@ class _DispatchInboxScreenState extends State<DispatchInboxScreen> {
   List<Map<String, dynamic>> incidents = [];
   bool isLoading = true;
   String? errorMessage;
+  MapboxMap? _mapboxMap;
 
   @override
   void initState() {
@@ -105,8 +107,32 @@ class _DispatchInboxScreenState extends State<DispatchInboxScreen> {
             child: Stack(
               children: [
                 MapWidget(
-                  onMapCreated: (MapboxMap mapboxMap) {
-                    // Map initialization
+                  onMapCreated: (MapboxMap mapboxMap) async {
+                    _mapboxMap = mapboxMap;
+                    await mapboxMap.location.updateSettings(
+                      LocationComponentSettings(
+                        enabled: true,
+                        pulsingEnabled: true,
+                        pulsingColor: MuhafizTheme.sovereignGreen.toARGB32(),
+                      ),
+                    );
+                    try {
+                      geo.LocationPermission perm = await geo.Geolocator.checkPermission();
+                      if (perm == geo.LocationPermission.denied) {
+                        perm = await geo.Geolocator.requestPermission();
+                      }
+                      if (perm == geo.LocationPermission.deniedForever) return;
+                      final pos = await geo.Geolocator.getCurrentPosition(
+                        locationSettings: const geo.LocationSettings(accuracy: geo.LocationAccuracy.high),
+                      );
+                      await mapboxMap.flyTo(
+                        CameraOptions(
+                          center: Point(coordinates: Position(pos.longitude, pos.latitude)),
+                          zoom: 14,
+                        ),
+                        MapAnimationOptions(duration: 1200),
+                      );
+                    } catch (_) {}
                   },
                 ),
                 // Overlay for the "Live Routing Map" HUD

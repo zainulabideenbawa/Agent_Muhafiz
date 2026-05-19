@@ -83,14 +83,95 @@ class _GroundTruthScreenState extends State<GroundTruthScreen> {
     }
   }
 
+  Future<void> _showConfirmDialog() async {
+    final noteController = TextEditingController(
+      text: 'Crisis confirmed active by field officer.',
+    );
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A2E),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: MuhafizTheme.crisisRed.withValues(alpha: 0.5)),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_rounded, color: MuhafizTheme.crisisRed, size: 20),
+            SizedBox(width: 8),
+            Text(
+              'CONFIRM CRISIS',
+              style: TextStyle(
+                color: MuhafizTheme.crisisRed,
+                fontFamily: 'monospace',
+                fontWeight: FontWeight.bold,
+                fontSize: 15,
+                letterSpacing: 1,
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'This will keep the alert ACTIVE system-wide. Add officer notes:',
+              style: TextStyle(color: MuhafizTheme.textSecondary, fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: noteController,
+              maxLines: 3,
+              style: const TextStyle(color: Colors.white, fontFamily: 'monospace', fontSize: 12),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: Colors.black38,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: MuhafizTheme.surfaceBorder),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: MuhafizTheme.surfaceBorder),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: MuhafizTheme.crisisRed),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('CANCEL', style: TextStyle(color: MuhafizTheme.textSecondary)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: MuhafizTheme.crisisRed,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('CONFIRM', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      await _handleConfirm(noteController.text.trim());
+    }
+  }
+
   Future<void> _handleConfirm(String note) async {
     setState(() => isSubmitting = true);
-    final success = await ApiService.confirmCrisis(
-      widget.incident['incident_id'] ?? '',
-      note,
-    );
-    if (!mounted) return;
-    if (success) {
+    try {
+      await ApiService.confirmCrisis(
+        widget.incident['incident_id'] ?? '',
+        note,
+      );
+      if (!mounted) return;
       setState(() {
         traceLogs.add({
           'agent': 'The Auditor',
@@ -100,20 +181,20 @@ class _GroundTruthScreenState extends State<GroundTruthScreen> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            'AUDITOR: Crisis confirmed — ${widget.incident['incident_id']}',
-          ),
-          backgroundColor: MuhafizTheme.sovereignGreen,
+          content: Text('CONFIRMED: ${widget.incident['incident_id']} — alert remains active.'),
+          backgroundColor: MuhafizTheme.crisisRed,
         ),
       );
       await Future.delayed(const Duration(seconds: 1));
       if (mounted) Navigator.pop(context);
-    } else {
+    } catch (e) {
+      if (!mounted) return;
       setState(() => isSubmitting = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('CONFIRMATION FAILED — CHECK SERVER'),
+        SnackBar(
+          content: Text('ERROR: $e'),
           backgroundColor: MuhafizTheme.crisisRed,
+          duration: const Duration(seconds: 6),
         ),
       );
     }
@@ -433,9 +514,7 @@ class _GroundTruthScreenState extends State<GroundTruthScreen> {
                     sublabel: 'Situation active — alert remains live',
                     color: MuhafizTheme.crisisRed,
                     icon: Icons.check_circle_outline,
-                    onPressed: () => _handleConfirm(
-                      'Crisis confirmed active by Sindh Police field units.',
-                    ),
+                    onPressed: _showConfirmDialog,
                   ),
                   const SizedBox(height: 12),
                   _buildVerdictButton(

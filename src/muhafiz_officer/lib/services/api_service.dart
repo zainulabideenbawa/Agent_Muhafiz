@@ -19,29 +19,35 @@ class ApiService {
   }
 
   static Future<bool> retractAlert(String incidentId, String reason) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/incidents/retract-alert'),
-      headers: {'Content-Type': 'application/json'},
-      body: json.encode({'incidentId': incidentId, 'reason': reason}),
-    ).timeout(const Duration(seconds: 10));
+    final response = await http
+        .post(
+          Uri.parse('$baseUrl/incidents/retract-alert'),
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode({'incidentId': incidentId, 'reason': reason}),
+        )
+        .timeout(const Duration(seconds: 10));
     return response.statusCode == 200;
   }
 
   static Future<bool> acceptQuest(String incidentId) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/incidents/accept-quest'),
-      headers: {'Content-Type': 'application/json'},
-      body: json.encode({'incidentId': incidentId}),
-    ).timeout(const Duration(seconds: 10));
+    final response = await http
+        .post(
+          Uri.parse('$baseUrl/incidents/accept-quest'),
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode({'incidentId': incidentId}),
+        )
+        .timeout(const Duration(seconds: 10));
     return response.statusCode == 200;
   }
 
-  static Future<bool> confirmCrisis(String incidentId) async {
+  static Future<void> confirmCrisis(String incidentId, String note) async {
     final response = await http.post(
       Uri.parse('$baseUrl/incidents/confirm-crisis'),
       headers: {'Content-Type': 'application/json'},
-      body: json.encode({'incidentId': incidentId}),
+      body: json.encode({'incidentId': incidentId, 'note': note}),
     ).timeout(const Duration(seconds: 10));
-    return response.statusCode == 200;
+    if (response.statusCode != 200) {
+      throw HttpException('Server returned ${response.statusCode}: ${response.body}');
+    }
   }
 }

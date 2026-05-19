@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'theme.dart';
 import 'screens/login_screen.dart';
 import 'screens/dispatch_inbox_screen.dart';
@@ -6,7 +7,11 @@ import 'services/auth_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  MapboxOptions.setAccessToken(
+    'pk.eyJ1IjoiemFpbmJhd2EiLCJhIjoiY21wNzd3dHA5MDE1djJycXVmMXk3NW5yOSJ9.YDIdVPYdoQeSkqTVArC2TA',
+  );
   final session = await OfficerAuthService.getSavedSession();
+
   runApp(MuhafizOfficerApp(isLoggedIn: session != null));
 }
 
@@ -105,7 +110,11 @@ class _QuestsTab extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.shield_outlined, color: MuhafizTheme.cautionAmber, size: 48),
+            Icon(
+              Icons.shield_outlined,
+              color: MuhafizTheme.cautionAmber,
+              size: 48,
+            ),
             SizedBox(height: 16),
             Text(
               'AWAITING QUEST DISPATCH',
@@ -120,7 +129,11 @@ class _QuestsTab extends StatelessWidget {
             Text(
               'High-priority quests appear as pop-up alerts\nwhen dispatched from the AI council.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: MuhafizTheme.textSecondary, fontSize: 12, height: 1.5),
+              style: TextStyle(
+                color: MuhafizTheme.textSecondary,
+                fontSize: 12,
+                height: 1.5,
+              ),
             ),
           ],
         ),
@@ -140,7 +153,11 @@ class _AuditPlaceholder extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.fact_check_outlined, color: MuhafizTheme.sovereignGreen, size: 48),
+            Icon(
+              Icons.fact_check_outlined,
+              color: MuhafizTheme.sovereignGreen,
+              size: 48,
+            ),
             SizedBox(height: 16),
             Text(
               'SELECT A MISSION FROM DISPATCH',
