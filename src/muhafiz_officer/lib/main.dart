@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'theme.dart';
 import 'screens/login_screen.dart';
 import 'screens/dispatch_inbox_screen.dart';
+import 'screens/quests_screen.dart';
+import 'screens/audit_screen.dart';
 import 'services/auth_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  MapboxOptions.setAccessToken(
-    'pk.eyJ1IjoiemFpbmJhd2EiLCJhIjoiY21wNzd3dHA5MDE1djJycXVmMXk3NW5yOSJ9.YDIdVPYdoQeSkqTVArC2TA',
-  );
   final session = await OfficerAuthService.getSavedSession();
 
   runApp(MuhafizOfficerApp(isLoggedIn: session != null));
@@ -51,8 +49,8 @@ class _OfficerShellState extends State<OfficerShell> {
         index: _selectedIndex,
         children: const [
           DispatchInboxScreen(),
-          _QuestsTab(),
-          _AuditPlaceholder(),
+          QuestsScreen(),
+          AuditScreen(),
         ],
       ),
       bottomNavigationBar: Container(
@@ -99,78 +97,3 @@ class _OfficerShellState extends State<OfficerShell> {
   }
 }
 
-class _QuestsTab extends StatelessWidget {
-  const _QuestsTab();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('VERIFICATION QUESTS')),
-      body: const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.shield_outlined,
-              color: MuhafizTheme.cautionAmber,
-              size: 48,
-            ),
-            SizedBox(height: 16),
-            Text(
-              'AWAITING QUEST DISPATCH',
-              style: TextStyle(
-                color: MuhafizTheme.cautionAmber,
-                fontFamily: 'monospace',
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.5,
-              ),
-            ),
-            SizedBox(height: 8),
-            Text(
-              'High-priority quests appear as pop-up alerts\nwhen dispatched from the AI council.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: MuhafizTheme.textSecondary,
-                fontSize: 12,
-                height: 1.5,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _AuditPlaceholder extends StatelessWidget {
-  const _AuditPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('GROUND TRUTH AUDIT')),
-      body: const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.fact_check_outlined,
-              color: MuhafizTheme.sovereignGreen,
-              size: 48,
-            ),
-            SizedBox(height: 16),
-            Text(
-              'SELECT A MISSION FROM DISPATCH',
-              style: TextStyle(
-                color: MuhafizTheme.textSecondary,
-                fontFamily: 'monospace',
-                letterSpacing: 1,
-                fontSize: 12,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

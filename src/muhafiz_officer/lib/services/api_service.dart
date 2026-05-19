@@ -40,6 +40,29 @@ class ApiService {
     return response.statusCode == 200;
   }
 
+  static Future<List<Map<String, dynamic>>> getTasks() async {
+    final response = await http
+        .get(Uri.parse('$baseUrl/tasks'))
+        .timeout(const Duration(seconds: 10));
+    if (response.statusCode == 200) {
+      return List<Map<String, dynamic>>.from(json.decode(response.body));
+    }
+    throw HttpException('Server returned ${response.statusCode}');
+  }
+
+  static Future<void> updateTaskStatus(String taskId, String status, String summary) async {
+    final response = await http
+        .post(
+          Uri.parse('$baseUrl/tasks/$taskId/status'),
+          headers: {'Content-Type': 'application/json'},
+          body: json.encode({'status': status, 'summary': summary}),
+        )
+        .timeout(const Duration(seconds: 10));
+    if (response.statusCode != 200) {
+      throw HttpException('Server returned ${response.statusCode}');
+    }
+  }
+
   static Future<void> confirmCrisis(String incidentId, String note) async {
     final response = await http.post(
       Uri.parse('$baseUrl/incidents/confirm-crisis'),
