@@ -96,7 +96,10 @@ class _DispatchInboxScreenState extends State<DispatchInboxScreen>
     try {
       final data = await ApiService.getIncidents();
       if (mounted) setState(() {
-        incidents = data;
+        incidents = data.where((inc) {
+          final status = (inc['status'] ?? '').toString().toUpperCase();
+          return status != 'RESOLVED' && status != 'RETRACTED' && status != 'COMPLETED';
+        }).toList();
         isLoading = false;
       });
     } catch (e) {
