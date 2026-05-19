@@ -105,11 +105,11 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
                     </div>
                 </div>
 
-                {/* Main Stage Icons */}
+                 {/* Main Stage Icons */}
                 <div className="flex-1 flex flex-col gap-3 w-full items-center">
                     <div className="relative group">
                         <button
-                            onClick={() => { setDashboardView('TACTICAL'); setView('dashboard'); }}
+                            onClick={() => { setDashboardView('TACTICAL'); setView('dashboard'); setSidebarOpen(true); }}
                             className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${dashboardView === 'TACTICAL' && view === 'dashboard' ? 'bg-white text-black' : 'text-zinc-500 hover:bg-white/5'}`}
                         >
                             <LayoutDashboard size={16} />
@@ -121,7 +121,7 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
 
                     <div className="relative group">
                         <button
-                            onClick={() => { setDashboardView('STRATEGIC'); setView('dashboard'); }}
+                            onClick={() => { setDashboardView('STRATEGIC'); setView('dashboard'); setSidebarOpen(true); }}
                             className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${dashboardView === 'STRATEGIC' ? 'bg-white text-black' : 'text-zinc-500 hover:bg-white/5'}`}
                         >
                             <TrendingUp size={16} />
@@ -133,7 +133,7 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
 
                     <div className="relative group">
                         <button
-                            onClick={() => { setDashboardView('MISSIONS'); setView('dashboard'); }}
+                            onClick={() => { setDashboardView('MISSIONS'); setView('dashboard'); setSidebarOpen(true); }}
                             className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${dashboardView === 'MISSIONS' ? 'bg-white text-black' : 'text-zinc-500 hover:bg-white/5'}`}
                         >
                             <ClipboardList size={16} />
@@ -145,7 +145,7 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
 
                     <div className="relative group">
                         <button
-                            onClick={() => { setDashboardView('ARCHIVE'); setView('dashboard'); }}
+                            onClick={() => { setDashboardView('ARCHIVE'); setView('dashboard'); setSidebarOpen(true); }}
                             className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${dashboardView === 'ARCHIVE' ? 'bg-white text-black' : 'text-zinc-500 hover:bg-white/5'}`}
                         >
                             <Search size={16} />
@@ -158,7 +158,7 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
                     {user.role === 'SUPER_ADMIN' && (
                         <div className="relative group">
                             <button
-                                onClick={() => { setDashboardView('ADMIN'); setView('dashboard'); }}
+                                onClick={() => { setDashboardView('ADMIN'); setView('dashboard'); setSidebarOpen(true); }}
                                 className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${dashboardView === 'ADMIN' ? 'bg-orange-500/20 text-orange-500 border border-orange-500/30' : 'text-zinc-500 hover:bg-white/5'}`}
                             >
                                 <Cpu size={16} />
@@ -171,7 +171,7 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
 
                     <div className="relative group">
                         <button
-                            onClick={() => { setDashboardView('BROADCAST'); setView('dashboard'); }}
+                            onClick={() => { setDashboardView('BROADCAST'); setView('dashboard'); setSidebarOpen(true); }}
                             className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${dashboardView === 'BROADCAST' ? 'bg-white text-black' : 'text-zinc-500 hover:bg-white/5'}`}
                         >
                             <Megaphone size={16} />
@@ -186,7 +186,7 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
                     {/* Agency Tools Icons */}
                     <div className="relative group">
                         <button
-                            onClick={() => setView('guidance')}
+                            onClick={() => { setView('guidance'); setSidebarOpen(true); }}
                             className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${view === 'guidance' ? 'bg-emerald-600/20 text-emerald-500 border border-emerald-500/30' : 'text-zinc-500 hover:bg-white/5'}`}
                         >
                             <Terminal size={16} />
@@ -198,7 +198,7 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
 
                     <div className="relative group">
                         <button
-                            onClick={() => setView('manage')}
+                            onClick={() => { setView('manage'); setSidebarOpen(true); }}
                             className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${view === 'manage' ? 'bg-blue-600/20 text-blue-500 border border-blue-500/30' : 'text-zinc-500 hover:bg-white/5'}`}
                         >
                             <Settings size={16} />

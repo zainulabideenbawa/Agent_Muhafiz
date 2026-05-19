@@ -7,7 +7,7 @@ import { HeatmapLayer } from '@deck.gl/aggregation-layers';
 
 const MAPBOX_TOKEN = "pk.eyJ1IjoiemFpbmJhd2EiLCJhIjoiY21wNzd3dHA5MDE1djJycXVmMXk3NW5yOSJ9.YDIdVPYdoQeSkqTVArC2TA";
 
-const DigitalTwinMap = ({ incidents, onMarkerClick }) => {
+const DigitalTwinMap = ({ incidents, selectedIncident, onMarkerClick }) => {
     const [viewState, setViewState] = useState({
         longitude: 67.04,
         latitude: 24.89,
@@ -21,6 +21,18 @@ const DigitalTwinMap = ({ incidents, onMarkerClick }) => {
     const [selectedIncidentTooltip, setSelectedIncidentTooltip] = useState(null);
     const [hoveredIncident, setHoveredIncident] = useState(null);
     const [showRiskMap, setShowRiskMap] = useState(false);
+
+    useEffect(() => {
+        if (selectedIncident && selectedIncident.location) {
+            setViewState(prev => ({
+                ...prev,
+                longitude: selectedIncident.location.lng || 67.04,
+                latitude: selectedIncident.location.lat || 24.89,
+                zoom: 13.5,
+                transitionDuration: 1500
+            }));
+        }
+    }, [selectedIncident]);
 
     useEffect(() => {
         const interval = setInterval(() => {
@@ -197,7 +209,8 @@ const DigitalTwinMap = ({ incidents, onMarkerClick }) => {
                                 </div>
 
                                 <button 
-                                    onClick={() => {
+                                    onClick={(e) => {
+                                        e.stopPropagation();
                                         onMarkerClick(selectedIncidentTooltip);
                                         setSelectedIncidentTooltip(null);
                                     }}

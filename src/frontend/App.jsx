@@ -76,6 +76,12 @@ function App() {
   const [resolutionAlert, setResolutionAlert] = useState(null); // for False Alarm / Road Clear / Confirmed banners
 
   useEffect(() => {
+    if (user && user.role === 'DEPT_ADMIN' && user.department) {
+      setActiveDept(user.department);
+    }
+  }, [user]);
+
+  useEffect(() => {
     const fetchStats = async () => {
       try {
         const res = await fetch(`http://127.0.0.1:3001/api/department-resources/${activeDept}`);
@@ -367,48 +373,30 @@ function App() {
         {/* Center: Tactical Map / Strategic Audit */}
         <div
           className="flex-1 relative bg-zinc-900 transition-all duration-500"
-          style={{ paddingLeft: dashboardView === 'TACTICAL' ? '0px' : (sidebarOpen ? '288px' : '64px') }}
+          style={{ paddingLeft: sidebarOpen ? '288px' : '64px' }}
         >
           {dashboardView === 'TACTICAL' ? (
             <div className="w-full h-full relative">
               <DigitalTwinMap
                 incidents={filteredIncidents}
+                selectedIncident={selectedIncident}
                 onMarkerClick={(inc) => {
                   setSelectedIncident(inc);
                   setSidebarOpen(true);
                   setSidebarView('dashboard');
+                  setDashboardView('TACTICAL');
+                  if (inc.department) {
+                    setActiveDept(inc.department);
+                  }
                 }}
               />
 
               {/* Tactical Overlays (Map Space Only) */}
-              <div
-                className="absolute top-6 left-6 z-20 transition-all duration-500"
-                style={{ transform: sidebarOpen ? 'translateX(288px)' : 'translateX(64px)' }}
-              >
+              <div className="absolute top-6 left-6 z-20">
                 <TacticalLegend />
               </div>
 
-              {/* Bottom-Right: Unified Signal Hub */}
-              <div className="absolute bottom-6 right-6 z-30 flex flex-col gap-3 items-end pointer-events-auto">
-                <div className="flex gap-2">
-                  <button onClick={() => triggerSimulation("flood")} disabled={isSimulating} className="px-3 py-1.5 font-black rounded-lg border border-white/5 bg-black/40 text-[8px] tracking-widest uppercase hover:bg-emerald-500/10 hover:text-emerald-500 transition-all">
-                    + FLOOD_SIM
-                  </button>
-                  <button onClick={() => triggerSimulation("fire")} disabled={isSimulating} className="px-3 py-1.5 font-black rounded-lg border border-white/5 bg-black/40 text-[8px] tracking-widest uppercase hover:bg-orange-500/10 hover:text-orange-500 transition-all">
-                    + FIRE_SIM
-                  </button>
-                </div>
-                <div className="w-72 p-4 bg-black/80 backdrop-blur-3xl border border-white/5 rounded-2xl shadow-2xl">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Globe size={10} className="text-blue-500" />
-                    <span className="text-[8px] font-black uppercase tracking-widest text-zinc-500">OSINT Signal Ingest</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <input id="social_input" type="text" placeholder="Simulate signal..." className="flex-1 bg-white/5 border border-white/5 rounded px-2 py-1.5 text-[10px] outline-none focus:border-blue-500/30 transition-all" />
-                    <button onClick={() => { const i = document.getElementById('social_input'); triggerSimulation('social', i.value); i.value = ''; }} className="px-3 py-1.5 bg-blue-600/20 text-blue-400 border border-blue-400/30 rounded text-[8px] font-black uppercase hover:bg-blue-600 hover:text-white transition-all">INGEST</button>
-                  </div>
-                </div>
-              </div>
+
             </div>
           ) : dashboardView === 'STRATEGIC' ? (
             <div className="w-full h-full overflow-y-auto bg-black/5 backdrop-blur-md animate-in fade-in duration-500">
