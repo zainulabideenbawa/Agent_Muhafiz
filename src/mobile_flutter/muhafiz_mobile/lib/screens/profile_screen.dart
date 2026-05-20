@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../theme/theme.dart';
+import '../services/api_service.dart';
 import 'login_screen.dart';
 import '../widgets/feedback_widgets.dart';
 
@@ -208,13 +210,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return SizedBox(
       width: double.infinity,
       child: OutlinedButton.icon(
-        onPressed: () {
-          MuhafizFeedback.showToast("SESSION TERMINATED");
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (context) => const LoginScreen()),
-            (route) => false,
-          );
+        onPressed: () async {
+          try {
+            await ApiService.post('/logout', {});
+          } catch (e) {
+            print("Server logout failed: $e");
+          }
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.remove('auth_token');
+          await prefs.remove('user_name');
+          await prefs.remove('user_nic');
+          await prefs.remove('user_sector');
+
+          if (mounted) {
+            MuhafizFeedback.showToast("SESSION TERMINATED");
+            Navigator.pushAndRemoveUntil(
+              context,
+              MaterialPageRoute(builder: (context) => const LoginScreen()),
+              (route) => false,
+            );
+          }
         },
         icon: const Icon(LucideIcons.logOut, size: 18),
         label: const Text('TERMINATE SESSION'),

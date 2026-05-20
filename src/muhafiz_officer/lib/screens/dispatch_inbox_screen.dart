@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:animate_do/animate_do.dart';
@@ -96,10 +97,7 @@ class _DispatchInboxScreenState extends State<DispatchInboxScreen>
     try {
       final data = await ApiService.getIncidents();
       if (mounted) setState(() {
-        incidents = data.where((inc) {
-          final status = (inc['status'] ?? '').toString().toUpperCase();
-          return status != 'RESOLVED' && status != 'RETRACTED' && status != 'COMPLETED';
-        }).toList();
+        incidents = data;
         isLoading = false;
       });
     } catch (e) {
@@ -320,11 +318,14 @@ class _DispatchInboxScreenState extends State<DispatchInboxScreen>
 
     // Incident threat zones
     for (final inc in incidents) {
+      final String status = (inc['status'] ?? '').toString().toUpperCase();
+      if (status == 'RESOLVED' || status == 'RETRACTED' || status == 'COMPLETED') {
+        continue;
+      }
       final loc = (inc['location'] ?? '').toString();
       if (loc.isEmpty || loc == 'ANALYZING') continue;
       final LatLng pos = GeocodingService.geocodeSync(loc);
       final Color color = _severityColor(inc);
-      final String status = (inc['status'] ?? '').toString().toUpperCase();
       final double radius = status == 'CONFIRMED' ? 500.0 : 320.0;
 
       circles.add(CircleMarker(
@@ -626,8 +627,20 @@ class _DispatchInboxScreenState extends State<DispatchInboxScreen>
   }
 
   Widget _buildMissionCard(Map<String, dynamic> inc) {
-    final Color color = _severityColor(inc);
-    final String status = (inc['status'] ?? 'ANALYZING').toString();
+    Color color = _severityColor(inc);
+    final String rawStatus = (inc['status'] ?? 'ANALYZING').toString().toUpperCase();
+    String status = rawStatus;
+    
+    if (rawStatus == 'RESOLVED' || rawStatus == 'COMPLETED') {
+      status = 'ROAD CLEAR';
+      color = MuhafizTheme.sovereignGreen;
+    } else if (rawStatus == 'RETRACTED') {
+      status = 'FALSE ALARM';
+      color = Colors.grey;
+    }
+
+    final bool isClosed = rawStatus == 'RESOLVED' || rawStatus == 'COMPLETED' || rawStatus == 'RETRACTED';
+
     final String type = (inc['type'] ?? 'UNKNOWN').toString();
     final double conf = ((inc['confidence'] ??
             inc['ai_confidence'] ??
@@ -635,12 +648,16 @@ class _DispatchInboxScreenState extends State<DispatchInboxScreen>
         .toDouble();
 
     return GestureDetector(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => GroundTruthScreen(incident: inc),
-        ),
-      ),
+      onTap: () {
+        if (!isClosed) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => GroundTruthScreen(incident: inc),
+            ),
+          );
+        }
+      },
       child: Container(
         width: 240,
         margin: const EdgeInsets.only(right: 10, bottom: 10),
@@ -727,6 +744,48 @@ class _DispatchInboxScreenState extends State<DispatchInboxScreen>
                 ),
               ],
             ),
+            if (isClosed) ...[
+              const SizedBox(height: 6),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: color.withValues(alpha: 0.35)),
+                ),
+                child: Builder(
+                  builder: (context) {
+                    String? retractionReason;
+                    if (inc['data'] is Map) {
+                      retractionReason = inc['data']['retraction_reason']?.toString();
+                    } else if (inc['data'] is String) {
+                      try {
+                        final decoded = json.decode(inc['data'] as String);
+                        if (decoded is Map) {
+                          retractionReason = decoded['retraction_reason']?.toString();
+                        }
+                      } catch (_) {}
+                    }
+                    retractionReason ??= inc['retraction_reason']?.toString();
+
+                    return Text(
+                      rawStatus == 'RETRACTED'
+                          ? '🚫 FALSE ALARM: ${retractionReason ?? "Alert retracted by Auditor agent."}'
+                          : '🛣️ ROAD CLEAR: Emergency resolved. Corridor restored.',
+                      style: TextStyle(
+                        color: color,
+                        fontSize: 8,
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'monospace',
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    );
+                  }
+                ),
+              ),
+            ],
             const Spacer(),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -742,16 +801,19 @@ class _DispatchInboxScreenState extends State<DispatchInboxScreen>
                   padding: const EdgeInsets.symmetric(
                       horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: MuhafizTheme.sovereignGreen.withValues(alpha: 0.1),
+                    color: isClosed 
+                        ? color.withValues(alpha: 0.1) 
+                        : MuhafizTheme.sovereignGreen.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(4),
                     border: Border.all(
-                        color: MuhafizTheme.sovereignGreen
-                            .withValues(alpha: 0.4)),
+                        color: isClosed
+                            ? color.withValues(alpha: 0.4)
+                            : MuhafizTheme.sovereignGreen.withValues(alpha: 0.4)),
                   ),
-                  child: const Text(
-                    'OPEN →',
+                  child: Text(
+                    isClosed ? 'CLOSED' : 'OPEN →',
                     style: TextStyle(
-                      color: MuhafizTheme.sovereignGreen,
+                      color: isClosed ? color : MuhafizTheme.sovereignGreen,
                       fontSize: 9,
                       fontFamily: 'monospace',
                       fontWeight: FontWeight.bold,

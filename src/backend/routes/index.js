@@ -5,16 +5,22 @@ import departmentsRouter from './departments.js';
 import authRouter from './auth.js';
 import tasksRouter from './tasks.js';
 import sovereignRouter from './sovereign.js';
-import healthRouter from './health.js';
+import adminRouter from './admin.js';
+import { verifyToken } from '../middleware/auth.js';
 
 const router = Router();
 
+// Public routes
 router.use('/tools', toolsRouter);
-router.use('/api/incidents', incidentsRouter);
-router.use('/api', departmentsRouter);
-router.use('/api', authRouter);
-router.use('/api/tasks', tasksRouter);
-router.use('/api', sovereignRouter);
-router.use('/api/health', healthRouter);
+router.use('/api', authRouter); // login, logout, citizen routes
+
+// Protected routes – require JWT
+router.use('/api/incidents', verifyToken, incidentsRouter);
+router.use('/api', verifyToken, departmentsRouter);
+router.use('/api/tasks', verifyToken, tasksRouter);
+router.use('/api', verifyToken, sovereignRouter);
+router.use('/api/admin', verifyToken, adminRouter);
+
 
 export default router;
+

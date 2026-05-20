@@ -136,6 +136,7 @@ class _SentinelPulseTabState extends State<_SentinelPulseTab> {
       if (data != null) {
         setState(() {
           _activeAlert = {
+            'id': message['incidentId']?.toString() ?? '',
             'dept': assignedDept,
             'scope': data['scope'] ?? 'LOCAL',
             'push_en': data['push_notification']?['en'] ?? 'Emergency crisis alert broadcasted near your sector.',
@@ -145,6 +146,17 @@ class _SentinelPulseTabState extends State<_SentinelPulseTab> {
           };
           _showAlert = true;
         });
+      }
+    } else if (type == 'RESOLUTION_ALERT') {
+      final incidentId = message['incidentId']?.toString();
+      final resolution = message['resolution']?.toString();
+      if (incidentId != null && _activeAlert != null && _activeAlert!['id'] == incidentId) {
+        if (resolution == 'FALSE_ALARM' || resolution == 'ROAD_CLEAR') {
+          setState(() {
+            _showAlert = false;
+            _activeAlert = null;
+          });
+        }
       }
     }
   }

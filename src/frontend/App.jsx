@@ -13,6 +13,7 @@ import MissionDashboard from './components/MissionDashboard';
 import SovereignIntelligence from './components/SovereignIntelligence';
 import SovereignLogin from './components/SovereignLogin';
 import CrisisExplorer from './components/CrisisExplorer';
+import UserManagement from './components/UserManagement';
 
 const resolveHotspotCoordinates = (locationName) => {
   const name = (locationName || "").toLowerCase();
@@ -51,8 +52,14 @@ function App() {
     else localStorage.removeItem('muhafiz_user');
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await fetch('http://127.0.0.1:3001/api/logout', { method: 'POST' });
+    } catch (e) {
+      console.error("Logout request failed:", e);
+    }
     localStorage.removeItem('muhafiz_user');
+    localStorage.removeItem('auth_token');
     setUser(null);
     setIncidents([]);
     setTraces([]);
@@ -381,7 +388,7 @@ function App() {
             dashboardView={dashboardView}
             setDashboardView={setDashboardView}
             user={user}
-            onLogout={() => handleLogin(null)}
+            onLogout={handleLogout}
             sidebarOpen={sidebarOpen}
             setSidebarOpen={setSidebarOpen}
             selectedIncident={selectedIncident}
@@ -433,6 +440,10 @@ function App() {
           ) : dashboardView === 'ADMIN' ? (
             <div className="w-full h-full overflow-y-auto bg-black/5 backdrop-blur-md animate-in fade-in duration-500">
               <SovereignIntelligence />
+            </div>
+          ) : dashboardView === 'USERS' ? (
+            <div className="w-full h-full overflow-y-auto bg-black/5 backdrop-blur-md animate-in fade-in duration-500">
+              <UserManagement />
             </div>
           ) : (
             <div className="w-full h-full overflow-y-auto bg-black/5 backdrop-blur-md animate-in fade-in duration-500">

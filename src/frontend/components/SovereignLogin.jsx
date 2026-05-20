@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Shield, Fingerprint, Lock, ChevronRight, Cpu, User } from 'lucide-react';
+import { setToken } from '../utils/auth';
 
 const SovereignLogin = ({ onLogin }) => {
     const [email, setEmail] = useState('');
@@ -20,6 +21,9 @@ const SovereignLogin = ({ onLogin }) => {
             });
             const data = await res.json();
             if (data.success) {
+                if (data.token) {
+                    setToken(data.token);
+                }
                 onLogin(data.user);
             } else {
                 setError(data.message || 'Authentication Failed');
