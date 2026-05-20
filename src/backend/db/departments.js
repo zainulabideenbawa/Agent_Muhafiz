@@ -18,6 +18,10 @@ let departmentResources = {
     ],
     'RESCUE_1122': [
         { id: 'R11-CLI', name: 'Clifton HQ', location: 'Clifton', trucks: 3, ambulances: 15, officers: 30 }
+    ],
+    'KWSC_FWO': [
+        { id: 'KWSC-GUL', name: 'KWSC Gulshan Depot', location: 'Gulshan', trucks: 4, ambulances: 0, officers: 12 },
+        { id: 'FWO-CEN', name: 'FWO Central HQ', location: 'Saddar', trucks: 5, ambulances: 0, officers: 20 }
     ]
 };
 

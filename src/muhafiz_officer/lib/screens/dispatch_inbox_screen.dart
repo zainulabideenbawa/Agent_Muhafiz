@@ -522,7 +522,7 @@ class _DispatchInboxScreenState extends State<DispatchInboxScreen>
 
   Widget _buildMissionFeed() {
     return Container(
-      height: 230,
+      height: 260,
       decoration: BoxDecoration(
         color: const Color(0xFF080F1D),
         border: Border(
@@ -647,6 +647,20 @@ class _DispatchInboxScreenState extends State<DispatchInboxScreen>
             0.0) as num)
         .toDouble();
 
+    Map<String, dynamic>? coordinatedSla;
+    if (inc['coordinated_sla'] is Map) {
+      coordinatedSla = Map<String, dynamic>.from(inc['coordinated_sla'] as Map);
+    } else if (inc['coordinated_sla'] is String && (inc['coordinated_sla'] as String).isNotEmpty) {
+      try {
+        final decoded = json.decode(inc['coordinated_sla'] as String);
+        if (decoded is Map) {
+          coordinatedSla = Map<String, dynamic>.from(decoded);
+        }
+      } catch (_) {}
+    } else if (inc['data'] is Map && inc['data']['coordinated_sla'] is Map) {
+      coordinatedSla = Map<String, dynamic>.from(inc['data']['coordinated_sla'] as Map);
+    }
+
     return GestureDetector(
       onTap: () {
         if (!isClosed) {
@@ -667,20 +681,6 @@ class _DispatchInboxScreenState extends State<DispatchInboxScreen>
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: color.withValues(alpha: 0.35)),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(3),
-                    border: Border.all(color: color.withValues(alpha: 0.5)),
-                  ),
-                  child: Text(
                     status,
                     style: TextStyle(
                         color: color,
@@ -744,6 +744,87 @@ class _DispatchInboxScreenState extends State<DispatchInboxScreen>
                 ),
               ],
             ),
+            if (coordinatedSla != null && coordinatedSla.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0F1B35).withValues(alpha: 0.8),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: Colors.blueAccent.withValues(alpha: 0.5)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(LucideIcons.shieldAlert, color: Colors.blueAccent.withValues(alpha: 0.9), size: 10),
+                        const SizedBox(width: 4),
+                        const Text(
+                          'COORDINATED SLA ACTIVE',
+                          style: TextStyle(
+                            color: Colors.blueAccent,
+                            fontSize: 7.5,
+                            fontFamily: 'monospace',
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    ...coordinatedSla.keys.map((agency) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 2),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 3,
+                              height: 3,
+                              decoration: const BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.blueAccent,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                agency,
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 7,
+                                  fontFamily: 'monospace',
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 0.5),
+                              decoration: BoxDecoration(
+                                color: Colors.blueAccent.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                              child: const Text(
+                                'ACTIVE',
+                                style: TextStyle(
+                                  color: Colors.blueAccent,
+                                  fontSize: 5.5,
+                                  fontFamily: 'monospace',
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+            ],
             if (isClosed) ...[
               const SizedBox(height: 6),
               Container(

@@ -13,30 +13,95 @@ const CITY_SENSORS = [
     { id: 'SEN-FED-H', name: 'Federal B Humidity', type: 'HUMIDITY', lat: 24.9167, lng: 67.0667 },
     { id: 'SEN-NIPA-SF', name: 'NIPA Sewer Flow', type: 'SEWER_FLOW', lat: 24.9175, lng: 67.0970 },
     { id: 'SEN-UNI-SF', name: 'University Rd Flow', type: 'SEWER_FLOW', lat: 24.9200, lng: 67.1100 },
-    { id: 'SEN-SHA-SF', name: 'Shaheed-e-Millat Flow', type: 'SEWER_FLOW', lat: 24.8700, lng: 67.0700 }
+    { id: 'SEN-SHA-SF', name: 'Shaheed-e-Millat Flow', type: 'SEWER_FLOW', lat: 24.8700, lng: 67.0700 },
+    { id: 'SEN-UNI-DRAIN', name: 'University Rd Drainage', type: 'DRAINAGE', lat: 24.9200, lng: 67.1100 }
 ];
 
+let vitalsCache = {
+    avg_aqi: '68',
+    avg_temp: '31.5',
+    avg_humidity: '65',
+    last_updated: 0
+};
+let isFetchInProgress = false;
+
+const fetchWeatherApiData = async () => {
+    if (isFetchInProgress) return;
+    isFetchInProgress = true;
+    try {
+        const lat = 24.8607;
+        const lng = 67.0011;
+        
+        const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current=temperature_2m,relative_humidity_2m`;
+        const aqiUrl = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lng}&current=us_aqi`;
+        
+        const [weatherRes, aqiRes] = await Promise.all([
+            fetch(weatherUrl).then(r => r.json()),
+            fetch(aqiUrl).then(r => r.json())
+        ]);
+        
+        if (weatherRes?.current && aqiRes?.current) {
+            vitalsCache = {
+                avg_temp: parseFloat(weatherRes.current.temperature_2m).toFixed(1),
+                avg_humidity: parseInt(weatherRes.current.relative_humidity_2m).toFixed(0),
+                avg_aqi: parseInt(aqiRes.current.us_aqi).toFixed(0),
+                last_updated: Date.now()
+            };
+            console.log(`[Vitals API] Karachi live weather synchronized: Temp=${vitalsCache.avg_temp}°C, Humidity=${vitalsCache.avg_humidity}%, AQI=${vitalsCache.avg_aqi}`);
+        }
+    } catch (e) {
+        console.error("[Vitals API] Open-Meteo call failed, using cache:", e.message);
+    } finally {
+        isFetchInProgress = false;
+    }
+};
+
+// Initial trigger
+fetchWeatherApiData();
+
 export const getCitySensors = () => {
-    return CITY_SENSORS.map(s => ({
-        ...s,
-        last_read: s.type === 'AIR_QUALITY' ? (Math.random() * 200 + 50).toFixed(0) :
-            s.type === 'SEWER_FLOW' ? (Math.random() * 5).toFixed(1) + ' m/s' :
-                (Math.random() * 45).toFixed(1),
-        status: s.type === 'SEWER_FLOW' && Math.random() > 0.8 ? 'CRITICAL' : (Math.random() > 0.05 ? 'ONLINE' : 'OFFLINE'),
-        last_updated: new Date().toISOString()
-    }));
+    return CITY_SENSORS.map(s => {
+        let lastRead = '0';
+        if (s.type === 'AIR_QUALITY') {
+            const baseAQI = parseFloat(vitalsCache.avg_aqi) || 68;
+            lastRead = Math.max(0, Math.round(baseAQI + (Math.random() * 30 - 15))).toString();
+        } else if (s.type === 'TEMPERATURE') {
+            const baseTemp = parseFloat(vitalsCache.avg_temp) || 31.5;
+            lastRead = (baseTemp + (Math.random() * 4 - 2)).toFixed(1);
+        } else if (s.type === 'HUMIDITY') {
+            const baseHum = parseFloat(vitalsCache.avg_humidity) || 65;
+            lastRead = Math.min(100, Math.max(0, Math.round(baseHum + (Math.random() * 10 - 5)))).toString();
+        } else if (s.type === 'SEWER_FLOW') {
+            lastRead = (Math.random() * 5).toFixed(1) + ' m/s';
+        } else if (s.type === 'DRAINAGE') {
+            lastRead = '85%';
+        } else {
+            lastRead = (Math.random() * 45).toFixed(1);
+        }
+
+        return {
+            ...s,
+            last_read: lastRead,
+            ...(s.type === 'DRAINAGE' ? { capacity_used: 85 } : {}),
+            status: s.type === 'SEWER_FLOW' && Math.random() > 0.8 ? 'CRITICAL' : (Math.random() > 0.05 ? 'ONLINE' : 'OFFLINE'),
+            last_updated: new Date().toISOString()
+        };
+    });
 };
 
 export const getCityVitals = () => {
     const sensors = getCitySensors();
-    const aqi = sensors.filter(s => s.type === 'AIR_QUALITY');
-    const temp = sensors.filter(s => s.type === 'TEMPERATURE');
-    const humidity = sensors.filter(s => s.type === 'HUMIDITY');
+    
+    // Refresh cache in background if older than 5 minutes
+    const now = Date.now();
+    if (now - vitalsCache.last_updated > 5 * 60 * 1000) {
+        fetchWeatherApiData();
+    }
 
     return {
-        avg_aqi: (aqi.reduce((acc, s) => acc + parseFloat(s.last_read), 0) / aqi.length).toFixed(0),
-        avg_temp: (temp.reduce((acc, s) => acc + parseFloat(s.last_read), 0) / temp.length).toFixed(1),
-        avg_humidity: (humidity.reduce((acc, s) => acc + parseFloat(s.last_read), 0) / humidity.length).toFixed(0),
+        avg_aqi: vitalsCache.avg_aqi,
+        avg_temp: vitalsCache.avg_temp,
+        avg_humidity: vitalsCache.avg_humidity,
         active_nodes: sensors.filter(s => s.status === 'ONLINE').length,
         total_nodes: sensors.length
     };

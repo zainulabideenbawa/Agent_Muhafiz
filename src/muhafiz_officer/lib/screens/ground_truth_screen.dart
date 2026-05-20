@@ -979,7 +979,14 @@ class _GroundTruthScreenState extends State<GroundTruthScreen>
               ),
             ),
           ),
-
+          _verdictButton(
+            icon: LucideIcons.alertTriangle,
+            label: 'CONFIRM CRISIS',
+            sublabel: 'Crisis active — authorize full unit deployment',
+            color: MuhafizTheme.crisisRed,
+            onPressed: _showConfirmDialog,
+          ),
+          const SizedBox(height: 10),
           _verdictButton(
             icon: LucideIcons.xOctagon,
             label: 'FALSE ALARM',

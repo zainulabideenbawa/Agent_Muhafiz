@@ -656,7 +656,7 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
                                                 No active incidents. grid is green.
                                             </div>
                                         ) : (
-                                            (incidents || []).map((inc) => (
+                                            [...(incidents || [])].reverse().map((inc) => (
                                                 <div 
                                                     key={inc.id} 
                                                     onClick={() => setSelectedIncident(inc)}

@@ -110,6 +110,22 @@ const INFRASTRUCTURE_RISKS = {
             hospitals_at_risk: ['Nearest hospital — access route at risk'],
         },
     },
+    proactive_maintenance: {
+        university_road: {
+            population: 95000,
+            duration: 'Pre-emptive: 2-3 hours sludge suction operation',
+            spread: 'Preventative — sludge clearance along BRT Red Line drainage corridor to prevent massive traffic paralysis before the storm hits',
+            risks: ['BRT Red Line construction corridor drainage lines', 'University Road main sewage arteries', 'NIPA Chowrangi drainage channels'],
+            hospitals_at_risk: ['Aga Khan Hospital access routes (preventative standby)', 'Liaquat National Hospital access routes (preventative standby)'],
+        },
+        default: {
+            population: 95000,
+            duration: 'Pre-emptive: 2-3 hours sludge suction operation',
+            spread: 'Preventative — sludge clearance along BRT Red Line drainage corridor to prevent massive traffic paralysis before the storm hits',
+            risks: ['BRT Red Line construction corridor drainage lines', 'University Road main sewage arteries', 'NIPA Chowrangi drainage channels'],
+            hospitals_at_risk: ['Aga Khan Hospital access routes (preventative standby)', 'Liaquat National Hospital access routes (preventative standby)'],
+        }
+    }
 };
 
 const getZoneRisk = (crisisType, landmark) => {

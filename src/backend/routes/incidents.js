@@ -85,6 +85,8 @@ router.get('/', async (req, res) => {
                 analyst_prediction: impact.spread_prediction
                     ? `${impact.spread_prediction} spread · ${impact.affected_population ?? '?'} affected · ${impact.estimated_duration ?? '?'}`
                     : null,
+                secondary_hazards: cls.secondary_hazards ?? d.secondary_hazards ?? [],
+                coordinated_sla: d.coordinated_sla ?? null,
             };
         });
         res.json(normalized);

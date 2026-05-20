@@ -62,9 +62,18 @@ const TACTICAL_TEMPLATES = {
         `4. MEDICAL STANDBY: ${nearestHospital} on standby for potential injuries. Edhi ambulance pre-positioned at perimeter.\n` +
         `5. AMBULANCE CORRIDOR: Maintain ONE dedicated emergency vehicle corridor at all times via ${routePrimary}.\n` +
         `6. ETA: ${eta} minutes to scene from ${hub}.`,
+
+    proactive_maintenance: (landmark, hub, eta, routePrimary, routeAvoid, policeBlock, nearestHospital) =>
+        `PROACTIVE INFRASTRUCTURE MAINTENANCE DIRECTIVE — ${landmark}\n` +
+        `1. ROUTE: Deploy suction trucks immediately from ${hub} via ${routePrimary}. Keep clear of ${routeAvoid}.\n` +
+        `2. TACTICAL DEPLOYMENT: Position KWSC/FWO suction trucks at designated catch-basins and main sewage junctions along the BRT Red Line corridor.\n` +
+        `3. DRAINAGE CLEARANCE: Extract sludge and clear solid blockages in the main line. Verify that capacity_used falls below 50%.\n` +
+        `4. POLICE COORDINATION: Request Traffic Police at ${policeBlock} to clear work zones and manage traffic diversions around active trucks.\n` +
+        `5. SECURE REPORT: Submit ground-truth confirmation once catch-basins are fully cleared. Silent operation: do not alert local news/social feeds.\n` +
+        `6. ETA: ${eta} minutes from ${hub}.`,
 };
 
-import { getDepartmentResources, updateDepartmentResources } from '../db/index.js';
+import { getDepartmentResources, updateDepartmentResources, getAllIncidents } from '../db/index.js';
 
 // Karachi coordinate lookup for database hubs
 const HUB_COORDINATES = {
@@ -101,9 +110,9 @@ const selectHubWithResources = async (dept, incidentLat, incidentLng, crisisType
 
     // 2. Determine resource requirements based on crisis type
     const type = (crisisType || "").toLowerCase();
-    const reqTrucks = (type === 'fire' || type === 'flood') ? 1 : 0;
+    const reqTrucks = (type === 'fire' || type === 'flood' || type === 'proactive_maintenance') ? 1 : 0;
     const reqAmbulances = (type === 'blast' || type === 'protest' || type === 'flood') ? 1 : 0;
-    const reqOfficers = type === 'fire' ? 5 : (type === 'blast' || type === 'protest') ? 5 : 3;
+    const reqOfficers = (type === 'fire' || type === 'proactive_maintenance') ? 5 : (type === 'blast' || type === 'protest') ? 5 : 3;
 
     // 3. Try closest hub first
     const primaryHub = hubsWithDist[0];
@@ -192,12 +201,86 @@ export const strategist = async (state) => {
         KMC_HEALTH: ['KMC Heavy Suction Pump (1,000 L/min)', 'Emergency Dewatering Excavator (JCB)', 'NDMA Relief Van (50 persons capacity)', 'KMC Drainage Crew (8 workers)'],
         RESCUE_1122: ['Rescue 1122 Rapid Response Van', 'Advanced Life Support Ambulance (ALS)', 'Edhi Ambulance Unit #3', 'Bomb Disposal Squad (CTD)', 'CCTV Surveillance Van'],
         POLICE_FORCE: ['Traffic Police Mobile Patrol Unit', 'DSP Riot Control Platoon (30 officers)', 'Police Negotiation Cell', 'Karachi Traffic Police Motorcycle Squad'],
+        KWSC_FWO: ['KWSC Gulshan Suction Truck (KWSC-GUL-T1)', 'FWO Central Sludge Clearance Unit (FWO-CEN-T1)', 'KWSC Heavy Duty Drainage Crew (6 officers)', 'FWO Special Operations Suction Fleet']
     };
     const selectedUnits = unitsByDept[dept] || unitsByDept.RESCUE_1122;
 
-    // Build tactical directive
+    // Select turn-by-turn or custom tactical directive
     const tacticalFn = TACTICAL_TEMPLATES[crisisType] || TACTICAL_TEMPLATES.flood;
     const tacticalDirective = tacticalFn(landmark, selectedHub.name, etaMins, routePrimary, routeAvoid, policeBlock, nearestHospital);
+
+    // Contention Engine Mathematical Modeling
+    const calculatePriorityScore = (severity, population, eta) => {
+        const severityPart = severity * 0.5;
+        const vulnDensity = Math.min(10, population / 10000);
+        const vulnPart = vulnDensity * 0.3;
+        const etaPart = Math.max(0, 60 - eta) * 0.2;
+        const score = severityPart + vulnPart + etaPart;
+        return {
+            score: parseFloat(score.toFixed(2)),
+            breakdown: `Severity: ${severity} * 0.5 = ${severityPart.toFixed(1)}, Vulnerability Density: ${vulnDensity.toFixed(2)} * 0.3 = ${vulnPart.toFixed(2)}, ETA: ${eta} mins -> (60 - ${eta}) * 0.2 = ${etaPart.toFixed(1)}`
+        };
+    };
+
+    const currentSeverity = state.classification?.urgency || triage.threat_level || 5;
+    const currentPopulation = state.impact_analysis?.affected_population || 30000;
+    const currentEta = etaMins || 15;
+    const currentPriority = calculatePriorityScore(currentSeverity, currentPopulation, currentEta);
+
+    // Retrieve active concurrent incidents from DB
+    let activeIncidents = [];
+    try {
+        const allDbIncidents = await getAllIncidents(20);
+        activeIncidents = allDbIncidents.filter(inc => 
+            ['PENDING', 'PROCESSING', 'QUEST_ACTIVE', 'INVESTIGATING', 'CONFIRMED'].includes(inc.status) &&
+            inc.incident_id !== state.incident_id && inc.incident_id !== state.metadata?.incidentId
+        );
+    } catch (e) {
+        console.warn('[Strategist] Failed to fetch active concurrent incidents:', e.message);
+    }
+
+    const rankedList = [
+        {
+            incident_id: state.metadata?.incidentId || state.incident_id || 'CURRENT',
+            type: crisisType,
+            location: landmark,
+            priority_score: currentPriority.score,
+            breakdown: currentPriority.breakdown,
+            status: 'ACTIVE_PLANNING'
+        }
+    ];
+
+    for (const inc of activeIncidents) {
+        const incType = inc.type || inc.data?.classification?.type || 'unknown';
+        const incLoc = inc.location || inc.data?.classification?.location?.landmark || 'Karachi';
+        const severity = inc.data?.classification?.urgency || inc.data?.triage?.threat_level || 5;
+        const population = inc.data?.impact_analysis?.affected_population || 30000;
+        const eta = inc.data?.action_plan?.deployment?.eta_mins || inc.data?.deployment?.eta_mins || 20;
+        
+        const priority = calculatePriorityScore(severity, population, eta);
+        rankedList.push({
+            incident_id: inc.incident_id,
+            type: incType,
+            location: incLoc,
+            priority_score: priority.score,
+            breakdown: priority.breakdown,
+            status: inc.status
+        });
+    }
+
+    // Sort ranked list descending by priority score
+    rankedList.sort((a, b) => b.priority_score - a.priority_score);
+
+    let contentionText = `[RESOURCE CONTENTION prioritization math]\n`;
+    contentionText += `Priority Score Formula: Severity * 0.5 + Math.min(10, Population / 10000) * 0.3 + (60 - ETA) * 0.2\n\n`;
+    contentionText += `Active Incident Rankings:\n`;
+    rankedList.forEach((r, idx) => {
+        contentionText += `${idx + 1}. [${r.incident_id}] ${r.type.toUpperCase()} at ${r.location} (Status: ${r.status}) -> Priority Score: ${r.priority_score}\n`;
+        contentionText += `   Breakdown: ${r.breakdown}\n`;
+    });
+
+    const currentRank = rankedList.findIndex(r => r.incident_id === (state.metadata?.incidentId || state.incident_id || 'CURRENT')) + 1;
+    const mathRationale = `Priority Score evaluated mathematically as: ${currentPriority.score}/10 based on formula [Severity(${currentSeverity})*0.5 + VulnDensity(${Math.min(10, currentPopulation / 10000).toFixed(2)})*0.3 + (60-ETA(${currentEta}))*0.2]. Currently ranked #${currentRank} of ${rankedList.length} active emergencies competing for resources.`;
 
     const heuristicPlan = {
         priority_level: (state.classification?.urgency || 0) >= 8 ? 'CRITICAL' : 'HIGH',
@@ -222,6 +305,7 @@ export const strategist = async (state) => {
         inter_agency_coordination: triage.police_notification || `Notify ${policeBlock} for route clearance. Coordinate with ${nearestHospital} for casualty intake.`,
         nearest_facility: nearestFacility ? `${nearestFacility} (OpenStreetMap verified)` : nearestHospital,
         reasoning: (warning ? `[RESOURCE TRADE-OFF] ${warning} ` : '') +
+            `${mathRationale}\n\n${contentionText}\n\n` +
             `Deployed from "${selectedHub.name}" (${selectedHub.location}) — closest available ${dept.replace(/_/g, ' ')} hub to ${landmark}. ` +
             `Real-time TomTom routing via ${routePrimary}: ETA ${etaLabel}. ` +
             `Traffic diversion: avoid ${routeAvoid}. Police block required at: ${policeBlock}. ` +
@@ -237,17 +321,22 @@ export const strategist = async (state) => {
     REAL ETA (TomTom): ${etaLabel}
     NEAREST FACILITY (OpenStreetMap): ${nearestFacility || 'not found'}
     WARNING: ${warning || 'none'}
+    CONCURRENT ACTIVE INCIDENTS: ${JSON.stringify(activeIncidents.map(i => ({ incident_id: i.incident_id, type: i.type, location: i.location })))}
     
     TASK — Be specific, use real addresses:
     1. Confirm the exact hub, list named units with capacities.
     2. Specify turn-by-turn route from hub to scene using real Karachi road names.
     3. State police clearance required at which exact intersection.
-    4. Write a tactical directive for field officers (numbered steps).
-    5. State inter-agency coordination needed. Include resource warnings if applicable.
+    4. Write a tactical directive for field officers (numbered steps). For "proactive_maintenance", write preventative catch-basin sludge suction steps.
+    5. Perform mathematical resource contention scoring using the formula:
+       Priority Score = Severity * 0.5 + Math.min(10, Population / 10000) * 0.3 + (60 - ETA) * 0.2
+       Current severity: ${currentSeverity}, population: ${currentPopulation}, ETA: ${currentEta}.
+       Rank current crisis against concurrent active incidents. Append this mathematical score and ranking rationale sentence inside "reasoning".
+    6. State inter-agency coordination needed. Include resource warnings if applicable.
     
     Respond ONLY in valid JSON: {
         "priority_level": string, "deployment": { "hub": string, "hub_address": string, "units": [string], "eta_mins": number, "eta_label": string },
-        "tactical_directive": string, "inter_agency_coordination": string, "nearest_facility": string, "reasoning": string
+        "tactical_directive": string, "inter_agency_coordination": string, "reasoning": string
     }`;
 
     let result;

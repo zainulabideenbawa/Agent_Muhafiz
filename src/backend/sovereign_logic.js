@@ -150,15 +150,34 @@ const _runPipeline = async (incidentId, input) => {
 
         // Single final status write — RESOLVED is what the frontend checks
         if (finalState.action_plan?.deployment) {
-            await insertTask({
-                task_id: 'TSK-' + Math.random().toString(36).substr(2, 4).toUpperCase(),
-                incident_ref: incidentId,
-                status: 'ON_SCENE',
-                assigned_agent: 'The Dispatcher',
-                mission_objective: finalState.action_plan?.tactical_directive || 'Urban Emergency Response',
-                priority_level: finalState.triage?.threat_level || 5,
-            });
-            console.log(`[Sovereign] Task Spawned for ${incidentId}`);
+            if (finalState.assigned_department === 'COORDINATED_SLA') {
+                const parallelAgencies = [
+                    { agent: 'Rescue 1122', objective: 'Primary emergency command and life-saving operations.' },
+                    { agent: 'K-Electric', objective: 'Isolate and shut off power in the specific flooded grid to prevent electrocution.' },
+                    { agent: 'Traffic Police', objective: 'Setup physical perimeter blocking and route diversions around the hazard zone.' }
+                ];
+                for (const agency of parallelAgencies) {
+                    await insertTask({
+                        task_id: 'TSK-' + Math.random().toString(36).substr(2, 4).toUpperCase(),
+                        incident_ref: incidentId,
+                        status: 'ON_SCENE',
+                        assigned_agent: agency.agent,
+                        mission_objective: agency.objective,
+                        priority_level: 9,
+                    });
+                }
+                console.log(`[Sovereign] Coordinated SLA 3-way tasks Spawned for ${incidentId}`);
+            } else {
+                await insertTask({
+                    task_id: 'TSK-' + Math.random().toString(36).substr(2, 4).toUpperCase(),
+                    incident_ref: incidentId,
+                    status: 'ON_SCENE',
+                    assigned_agent: 'The Dispatcher',
+                    mission_objective: finalState.action_plan?.tactical_directive || 'Urban Emergency Response',
+                    priority_level: finalState.triage?.threat_level || 5,
+                });
+                console.log(`[Sovereign] Task Spawned for ${incidentId}`);
+            }
         }
 
         await updateIncidentState(incidentId, 'RESOLVED', finalState);

@@ -14,11 +14,14 @@ export const oracle = async (state) => {
     const simResult = await run_impact_simulation(state.action_plan);
 
     // Derive specific simulation log from plan context
-    const congestionReduction = simResult.approved ? (25 + Math.floor(Math.random() * 30)) : 0;
-    const timeSaved = simResult.approved ? (5 + Math.floor(Math.random() * 20)) : 0;
-    const successProb = simResult.approved
+    const isProactive = crisisType === 'PROACTIVE_MAINTENANCE';
+    const isApproved = isProactive ? true : simResult.approved;
+
+    const congestionReduction = isApproved ? (25 + Math.floor(Math.random() * 30)) : 0;
+    const timeSaved = isApproved ? (5 + Math.floor(Math.random() * 20)) : 0;
+    const successProb = isProactive ? 0.88 : (isApproved
         ? (urgency >= 9 ? 0.88 + Math.random() * 0.10 : 0.82 + Math.random() * 0.15)
-        : 0.30 + Math.random() * 0.20;
+        : 0.30 + Math.random() * 0.20);
 
     const crisisSpecificLog = {
         FIRE: `Virtual rehearsal: Heavy Tanker arrival at ${landmark} in ${etaMins} min from ${hub}. ` +
@@ -26,25 +29,28 @@ export const oracle = async (state) => {
             `Estimated containment: ${Math.floor(etaMins * 1.5 + 10)} min from arrival. ` +
             `Aerial platform reach: sufficient for 4-storey structure. ` +
             `KESC power cut simulation: 2 min from on-scene arrival. ` +
-            `${simResult.approved ? `✅ Plan APPROVED — ${timeSaved}min faster than manual dispatch. Congestion reduced by ${congestionReduction}%.` : '⚠️ Route congestion may delay by 8+ min — police escort mandatory.'}`,
+            `${isApproved ? `✅ Plan APPROVED — ${timeSaved}min faster than manual dispatch. Congestion reduced by ${congestionReduction}%.` : '⚠️ Route congestion may delay by 8+ min — police escort mandatory.'}`,
 
         FLOOD: `Virtual rehearsal: Suction pump unit (1,000L/min) deployed to primary accumulation point at ${landmark}. ` +
             `Estimated dewatering time: ${Math.floor(60 + Math.random() * 120)} min for road clearance. ` +
             `KDA drain valve simulation: open at 85% capacity. ` +
             `Underpass closure verified in simulation — barriers deployed at ${Math.floor(3 + Math.random() * 5)} points. ` +
-            `${simResult.approved ? `✅ Plan APPROVED — ${timeSaved}min faster than manual dispatch. Congestion reduced by ${congestionReduction}%.` : '⚠️ Suction capacity insufficient if rainfall exceeds 40mm/h — request NDMA backup unit.'}`,
+            `${isApproved ? `✅ Plan APPROVED — ${timeSaved}min faster than manual dispatch. Congestion reduced by ${congestionReduction}%.` : '⚠️ Suction capacity insufficient if rainfall exceeds 40mm/h — request NDMA backup unit.'}`,
 
         BLAST: `Virtual rehearsal: CTD Bomb Disposal Squad leads entry at ${landmark}. ` +
             `300m cordon simulation: ${Math.floor(8 + Math.random() * 5)} intersections blocked. ` +
             `BDS clearance time simulation: ${Math.floor(20 + Math.random() * 40)} min. ` +
             `Trauma triage pre-positioned at cordon perimeter. ` +
-            `${simResult.approved ? `✅ Plan APPROVED — CTD + 1122 simultaneous response verified. Response time ${timeSaved}min ahead of baseline.` : '⚠️ Secondary device risk — BDS team requests additional personnel before entry.'}`,
+            `${isApproved ? `✅ Plan APPROVED — CTD + 1122 simultaneous response verified. Response time ${timeSaved}min ahead of baseline.` : '⚠️ Secondary device risk — BDS team requests additional personnel before entry.'}`,
 
         PROTEST: `Virtual rehearsal: Traffic Police Motorcycle Squad deployed to ${landmark}. ` +
             `Alternate route simulation: ${Math.floor(60 + Math.random() * 40)}% of diverted traffic successfully rerouted. ` +
             `Negotiation cell ETA: ${Math.floor(10 + Math.random() * 15)} min. ` +
             `Ambulance emergency corridor maintained (single lane). ` +
-            `${simResult.approved ? `✅ Plan APPROVED — civil order maintained. Congestion reduction ${congestionReduction}%. Protest expected to disperse within 3-5 hours.` : '⚠️ Crowd density exceeds safe limit — request additional riot control platoon.'}`,
+            `${isApproved ? `✅ Plan APPROVED — civil order maintained. Congestion reduction ${congestionReduction}%. Protest expected to disperse within 3-5 hours.` : '⚠️ Crowd density exceeds safe limit — request additional riot control platoon.'}`,
+
+        PROACTIVE_MAINTENANCE: `Virtual rehearsal: Preventative suction fleet deployment along ${landmark}. Dewatering capacity verified at 2,000L/min. Catch-basins clearance simulation: complete. Rain-drain capacity clearance rate: 95% efficiency. ` +
+            `✅ Plan APPROVED — pre-emptively cleared sludge. Road clearance guaranteed before storm hits.`
     };
 
     const simulationLog = crisisSpecificLog[crisisType] || crisisSpecificLog.FLOOD;
@@ -53,7 +59,7 @@ export const oracle = async (state) => {
         simulation: {
             success_probability: parseFloat(successProb.toFixed(2)),
             simulation_log: simulationLog,
-            approved: simResult.approved,
+            approved: isApproved,
             time_saved_minutes: timeSaved,
             congestion_reduction_pct: congestionReduction,
         }

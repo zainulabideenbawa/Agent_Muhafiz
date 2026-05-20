@@ -59,6 +59,17 @@ const DEPT_ROUTING = {
             nazimabad: { primary: 'Manghopir Road bypass', avoid: 'Hassan Square (protest epicentre)', police_block: 'Hassan Square + Five Star Chowrangi' },
             default: { primary: 'Parallel street bypass route', avoid: 'Main road of protest (complete closure)', police_block: 'Both terminal intersections of blocked road' }
         }
+    },
+    proactive_maintenance: {
+        department: 'KWSC_FWO',
+        category: 'PREVENTATIVE_MAINTENANCE',
+        threat_base: 5,
+        call_number: '021-99231218',
+        units: ['KWSC Gulshan Suction Truck (KWSC-GUL-T1)', 'FWO Central Sludge Clearance Unit (FWO-CEN-T1)'],
+        routes: {
+            university_road: { primary: 'University Road BRT Corridor (use specialized construction slip lanes)', avoid: 'BRT main construction channel during peak transit hours', police_block: 'NIPA Chowrangi to Hassan Square transit intersection' },
+            default: { primary: 'University Road BRT Corridor (use specialized construction slip lanes)', avoid: 'BRT main construction channel during peak transit hours', police_block: 'NIPA Chowrangi to Hassan Square transit intersection' }
+        }
     }
 };
 
@@ -121,8 +132,8 @@ export const dispatcher = async (state) => {
     ${directiveNote}
 
     TASK — Be extremely specific, not generic:
-    1. Assign Threat Level (1-10) and category.
-    2. Route to the correct department with call number.
+    1. Assign Threat Level (1-10) and category. For "proactive_maintenance", threat level must be 5 and category "PREVENTATIVE_MAINTENANCE".
+    2. Route to the correct department with call number. For "proactive_maintenance", routing must be to "KWSC_FWO".
     3. Name the SPECIFIC approach route to use from the nearest hub (avoid generics like "main road").
     4. State EXACTLY what traffic diversion is needed and which police station must clear which intersection.
     5. List specific units/assets to deploy (named vehicles, not "emergency units").
@@ -143,6 +154,60 @@ export const dispatcher = async (state) => {
         result = heuristicTriage;
     }
 
+    // Force and lock dispatch config for proactive maintenance regardless of LLM output
+    if (crisisType === 'proactive_maintenance') {
+        result.department = 'KWSC_FWO';
+        result.category = 'PREVENTATIVE_MAINTENANCE';
+        result.threat_level = 5;
+        result.emergency_contact = '021-99231218';
+        result.immediate_action = `DISPATCH KWSC Gulshan Suction Truck (KWSC-GUL-T1), FWO Central Sludge Clearance Unit (FWO-CEN-T1) immediately to ${landmark}.`;
+        result.route_directive = {
+            primary_route: 'University Road BRT Corridor (use specialized construction slip lanes)',
+            avoid: 'BRT main construction channel during peak transit hours',
+            police_block_required_at: 'NIPA Chowrangi to Hassan Square transit intersection'
+        };
+        result.police_notification = `Notify nearest police station to clear route at NIPA Chowrangi to Hassan Square transit intersection immediately. Request traffic diversion on BRT main construction channel during peak transit hours.`;
+        result.units_dispatched = ['KWSC Gulshan Suction Truck (KWSC-GUL-T1)', 'FWO Central Sludge Clearance Unit (FWO-CEN-T1)'];
+        result.reasoning = `PROACTIVE MAINTENANCE crisis at ${landmark} classified as PREVENTATIVE_MAINTENANCE. Threat Level 5/10. Routed to KWSC_FWO as primary responder. Primary approach: University Road BRT Corridor (use specialized construction slip lanes). Avoid: BRT main construction channel during peak transit hours. Police block required at: NIPA Chowrangi to Hassan Square transit intersection.`;
+    }
+
+    // Coordinated SLA override for exposed electrical wires
+    const secondaryHazards = classification?.secondary_hazards || [];
+    const isCoordinatedSLA = secondaryHazards.includes('exposed_electrical_wires');
+
+    if (isCoordinatedSLA) {
+        result.department = 'COORDINATED_SLA';
+        result.category = 'LIFE_SAFETY_AND_INFRASTRUCTURE';
+        result.threat_level = Math.max(result.threat_level || 5, 9); // Ensure high threat
+        result.immediate_action = 'ACTIVATE COORDINATED SLA: Spawn parallel responder directives for Rescue 1122, K-Electric, and Traffic Police.';
+        result.route_directive = {
+            primary_route: routeIntel.primary || 'Direct Emergency Approach Route',
+            avoid: routeIntel.avoid || 'Standard Hazard Radius',
+            police_block_required_at: routeIntel.police_block || 'Incident perimeter junctions'
+        };
+        result.units_dispatched = [
+            'Rescue 1122 Rapid Response Team',
+            'K-Electric Grid Isolation Squad',
+            'Traffic Police Perimeter Division'
+        ];
+        result.reasoning = `Flooding crisis at ${landmark} presents exposed electrical wire hazard. Coordinated SLA activated to execute parallel power grid isolation, emergency command, and perimeter traffic diversion.`;
+    }
+
+    const coordinatedSlaObj = isCoordinatedSLA ? {
+        "Rescue 1122": {
+            "task": "Primary emergency command and life-saving operations.",
+            "status": "PENDING"
+        },
+        "K-Electric": {
+            "task": "Isolate and shut off power in the specific flooded grid to prevent electrocution.",
+            "status": "PENDING"
+        },
+        "Traffic Police": {
+            "task": "Setup physical perimeter blocking and route diversions around the hazard zone.",
+            "status": "PENDING"
+        }
+    } : null;
+
     console.log(`[Agent: The Dispatcher] Triage: dept=${result.department}, threat=${result.threat_level}, route="${result.route_directive?.primary_route}"`);
     console.log(`[Agent: The Dispatcher] Police block required at: ${result.route_directive?.police_block_required_at}`);
     console.log(`[Agent: The Dispatcher] Reasoning: ${result.reasoning}`);
@@ -150,15 +215,21 @@ export const dispatcher = async (state) => {
     const log = {
         timestamp: new Date().toISOString(),
         agent: 'The Dispatcher',
-        message: `🚨 ${result.department.replace(/_/g, ' ')} DISPATCHED — Threat Level ${result.threat_level}/10 [${result.category}]. ` +
-            `Route: ${result.route_directive?.primary_route}. Police block: ${result.route_directive?.police_block_required_at}. Contact: ${result.emergency_contact}`,
-        outcome: 'Routed & Triaged',
-        details: result,
+        message: isCoordinatedSLA 
+            ? `🚨 MULTI-AGENCY COORDINATED SLA ACTIVATED for flooding with exposed wires at ${landmark}. Parallel tasks assigned to Rescue 1122, K-Electric, and Traffic Police.`
+            : `🚨 ${result.department.replace(/_/g, ' ')} DISPATCHED — Threat Level ${result.threat_level}/10 [${result.category}]. ` +
+              `Route: ${result.route_directive?.primary_route}. Police block: ${result.route_directive?.police_block_required_at}. Contact: ${result.emergency_contact}`,
+        outcome: isCoordinatedSLA ? 'Coordinated SLA' : 'Routed & Triaged',
+        details: {
+            ...result,
+            coordinated_sla: coordinatedSlaObj
+        },
     };
 
     return {
         triage: result,
         assigned_department: result.department,
+        coordinated_sla: coordinatedSlaObj,
         traceLogs: [log],
     };
 };
