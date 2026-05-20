@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:record/record.dart';
+import 'package:path_provider/path_provider.dart';
 import '../services/api_service.dart';
+import '../services/google_stt_service.dart';
 import '../widgets/feedback_widgets.dart';
 import '../theme/theme.dart';
 
@@ -19,10 +22,11 @@ class _VoiceReportScreenState extends State<VoiceReportScreen>
   late AnimationController _pulseController;
   late AnimationController _waveController;
 
-  // STT engine
-  final stt.SpeechToText _speech = stt.SpeechToText();
-  bool _speechAvailable = false;
-  bool _speechInitializing = false;
+  // Audio recorder → Google Cloud STT
+  final AudioRecorder _recorder = AudioRecorder();
+  bool _recorderReady = false;
+  bool _isTranscribing = false;   // waiting for Google STT response
+  String? _recordingPath;
 
   // Mode Toggle: Voice vs Text
   bool _isTextMode = false;
@@ -35,7 +39,8 @@ class _VoiceReportScreenState extends State<VoiceReportScreen>
   bool _isLogged = false;
 
   // Transcription / Input
-  String _transcribedText = '';
+  String _transcribedText = '';   // English translation — sent to server
+  String _originalUrdu = '';      // Urdu Arabic script — shown in UI
   String _lastWords = '';
   String _incidentId = '';
   double _confidence = 0.0;
@@ -55,31 +60,15 @@ class _VoiceReportScreenState extends State<VoiceReportScreen>
       duration: const Duration(milliseconds: 600),
     )..repeat(reverse: true);
 
-    _initSpeech();
+    _checkMicPermission();
   }
 
-  Future<void> _initSpeech() async {
-    setState(() => _speechInitializing = true);
-    try {
-      _speechAvailable = await _speech.initialize(
-        onError: (e) {
-          debugPrint('[STT] Error: $e');
-          setState(() {
-            _isRecording = false;
-            _status = 'STT ERROR – RETRY';
-          });
-        },
-        onStatus: (status) {
-          debugPrint('[STT] Status: $status');
-          if (status == 'notListening' && _isRecording) {
-            _stopRecording();
-          }
-        },
-      );
-    } catch (e) {
-      _speechAvailable = false;
+  Future<void> _checkMicPermission() async {
+    final hasPermission = await _recorder.hasPermission();
+    if (mounted) setState(() => _recorderReady = hasPermission);
+    if (!hasPermission) {
+      debugPrint('[Recorder] Microphone permission denied.');
     }
-    setState(() => _speechInitializing = false);
   }
 
   @override
@@ -87,7 +76,7 @@ class _VoiceReportScreenState extends State<VoiceReportScreen>
     _pulseController.dispose();
     _waveController.dispose();
     _durationTimer?.cancel();
-    _speech.stop();
+    _recorder.dispose();
     _textController.dispose();
     super.dispose();
   }
@@ -97,15 +86,18 @@ class _VoiceReportScreenState extends State<VoiceReportScreen>
   Future<void> _startRecording() async {
     if (_isSubmitting || _isLogged) return;
 
-    if (_speechInitializing) {
-      MuhafizFeedback.showToast('STT initializing, please wait...');
-      return;
+    if (!_recorderReady) {
+      // Re-request permission
+      final granted = await _recorder.hasPermission();
+      if (!granted) {
+        MuhafizFeedback.showToast('Microphone permission required. Switch to Text Mode.');
+        return;
+      }
+      setState(() => _recorderReady = true);
     }
 
-    if (!_speechAvailable) {
-      MuhafizFeedback.showToast('Speech recognition unavailable. Switch to Text Mode.');
-      return;
-    }
+    final dir = await getTemporaryDirectory();
+    _recordingPath = '${dir.path}/muhafiz_voice_${DateTime.now().millisecondsSinceEpoch}.wav';
 
     setState(() {
       _isRecording = true;
@@ -122,34 +114,72 @@ class _VoiceReportScreenState extends State<VoiceReportScreen>
       }
     });
 
-    await _speech.listen(
-      onResult: (result) {
-        if (mounted) {
-          setState(() {
-            _lastWords = result.recognizedWords;
-            _transcribedText = result.recognizedWords;
-            _confidence = result.confidence;
-          });
-        }
-      },
-      listenFor: const Duration(minutes: 2),
-      pauseFor: const Duration(seconds: 8),
-      partialResults: true,
-      localeId: 'ur_PK',
-      cancelOnError: false,
-    );
+    try {
+      await _recorder.start(
+        const RecordConfig(
+          encoder: AudioEncoder.wav,
+          sampleRate: 16000,
+          numChannels: 1,
+          bitRate: 256000,
+        ),
+        path: _recordingPath!,
+      );
+    } catch (e) {
+      debugPrint('[Recorder] start failed: $e');
+      _durationTimer?.cancel();
+      if (mounted) {
+        setState(() { _isRecording = false; _status = 'MIC ERROR – RETRY'; });
+        MuhafizFeedback.showToast('Could not start recording. Try Text Mode.');
+      }
+    }
   }
 
   Future<void> _stopRecording() async {
     if (!_isRecording) return;
-
     _durationTimer?.cancel();
-    await _speech.stop();
 
     setState(() {
       _isRecording = false;
-      _status = 'SIGNAL RECORDED - READY TO TRANSMIT';
+      _isTranscribing = true;
+      _status = 'TRANSCRIBING — GOOGLE STT';
     });
+
+    try {
+      final path = await _recorder.stop();
+      if (path == null || !File(path).existsSync()) {
+        throw Exception('Recording file not found.');
+      }
+      _recordingPath = path;
+
+      final result = await GoogleSttService.transcribe(path);
+      // Clean up audio file after transcription
+      try { File(path).deleteSync(); } catch (_) {}
+
+      if (mounted) {
+        setState(() {
+          _originalUrdu = result.originalUrdu;       // shown in UI
+          _transcribedText = result.transcript;       // English → server
+          _lastWords = result.transcript;
+          _confidence = result.confidence;
+          _isTranscribing = false;
+          _status = result.transcript.isEmpty
+              ? 'NO SPEECH DETECTED — RETRY'
+              : 'SIGNAL RECORDED — READY TO TRANSMIT';
+        });
+        if (result.transcript.isEmpty) {
+          MuhafizFeedback.showToast('No speech detected. Please try again.');
+        }
+      }
+    } catch (e) {
+      debugPrint('[STT] transcription failed: $e');
+      if (mounted) {
+        setState(() {
+          _isTranscribing = false;
+          _status = 'TRANSCRIPTION FAILED — RETRY';
+        });
+        MuhafizFeedback.showToast(e.toString().replaceFirst('Exception: ', ''));
+      }
+    }
   }
 
   Future<void> _submitVoiceReport() async {
@@ -176,7 +206,8 @@ class _VoiceReportScreenState extends State<VoiceReportScreen>
     await _transmitSignal(finalText, 'citizen_voice_report', {
       'confidence': _confidence.toStringAsFixed(2),
       'duration_sec': _recordingDuration.toStringAsFixed(1),
-      'locale': 'ur_PK',
+      'stt_engine': 'google_cloud',
+      'locale': 'ur-PK',
     });
   }
 
@@ -235,13 +266,16 @@ class _VoiceReportScreenState extends State<VoiceReportScreen>
     setState(() {
       _status = 'AWAITING SIGNAL';
       _isRecording = false;
+      _isTranscribing = false;
       _isSubmitting = false;
       _isLogged = false;
       _transcribedText = '';
+      _originalUrdu = '';
       _lastWords = '';
       _incidentId = '';
       _confidence = 0.0;
       _recordingDuration = 0.0;
+      _recordingPath = null;
       _textController.clear();
     });
   }
@@ -250,8 +284,11 @@ class _VoiceReportScreenState extends State<VoiceReportScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return GestureDetector(
+      onTap: () => FocusScope.of(context).unfocus(),
+      child: Scaffold(
       backgroundColor: MuhafizTheme.backgroundSlate,
+      resizeToAvoidBottomInset: true,
       appBar: _buildAppBar(),
       body: SafeArea(
         child: Column(
@@ -271,11 +308,39 @@ class _VoiceReportScreenState extends State<VoiceReportScreen>
               ),
             ),
 
-            // TRANSCRIPTION BOX
-            _buildTranscriptionBox(),
+            // TRANSCRIPTION BOX — voice mode only
+            if (!_isTextMode) _buildTranscriptionBox(),
+
+            // TRANSMIT BUTTON — floats above keyboard in text mode
+            if (_isTextMode && !_isLogged && !_isSubmitting)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+                child: SizedBox(
+                  height: 52,
+                  child: ElevatedButton.icon(
+                    onPressed: _isSubmitting ? null : _submitTextReport,
+                    icon: const Icon(LucideIcons.send, size: 14),
+                    label: const Text(
+                      'TRANSMIT EMERGENCY SIGNAL',
+                      style: TextStyle(
+                        fontFamily: 'JetBrains Mono',
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: MuhafizTheme.primaryEmerald,
+                      foregroundColor: const Color(0xFF003824),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4)),
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
+    ),
     );
   }
 
@@ -327,6 +392,10 @@ class _VoiceReportScreenState extends State<VoiceReportScreen>
       color = const Color(0xFFEF4444);
       icon = LucideIcons.mic;
       pulse = true;
+    } else if (_isTranscribing) {
+      color = Colors.blue;
+      icon = LucideIcons.brainCircuit;
+      pulse = true;
     } else if (_isSubmitting) {
       color = Colors.amber;
       icon = LucideIcons.loader;
@@ -334,10 +403,6 @@ class _VoiceReportScreenState extends State<VoiceReportScreen>
     } else if (_isLogged) {
       color = MuhafizTheme.primaryEmerald;
       icon = LucideIcons.checkCircle;
-    } else if (_speechInitializing) {
-      color = Colors.amber;
-      icon = LucideIcons.cpu;
-      pulse = true;
     }
 
     return Container(
@@ -368,7 +433,7 @@ class _VoiceReportScreenState extends State<VoiceReportScreen>
               ),
               const SizedBox(height: 2),
               Text(
-                _speechInitializing ? 'INITIALIZING STT...' : _status,
+                _isTranscribing ? 'GOOGLE STT — TRANSCRIBING...' : _status,
                 style: TextStyle(
                   color: color,
                   fontFamily: 'JetBrains Mono',
@@ -471,21 +536,7 @@ class _VoiceReportScreenState extends State<VoiceReportScreen>
             ),
           ),
         ),
-        const SizedBox(height: 18),
-        ElevatedButton.icon(
-          onPressed: _isSubmitting ? null : _submitTextReport,
-          icon: const Icon(LucideIcons.send, size: 14),
-          label: const Text(
-            'TRANSMIT EMERGENCY SIGNAL',
-            style: TextStyle(fontFamily: 'JetBrains Mono', fontWeight: FontWeight.bold, fontSize: 11),
-          ),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: MuhafizTheme.primaryEmerald,
-            foregroundColor: const Color(0xFF003824),
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-          ),
-        ),
+        const SizedBox(height: 8),
       ],
     );
   }
@@ -497,6 +548,45 @@ class _VoiceReportScreenState extends State<VoiceReportScreen>
         if (_isRecording) ...[
           _buildLiveWaveform(),
           const SizedBox(height: 36),
+        ] else if (_isTranscribing) ...[
+          SizedBox(
+            width: 120,
+            height: 120,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                const SizedBox(
+                  width: 90,
+                  height: 90,
+                  child: CircularProgressIndicator(
+                    color: Colors.blue,
+                    strokeWidth: 3,
+                  ),
+                ),
+                Icon(LucideIcons.brainCircuit,
+                    color: Colors.blue.withValues(alpha: 0.8), size: 32),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'GOOGLE CLOUD STT PROCESSING...',
+            style: TextStyle(
+              color: Colors.blue,
+              fontFamily: 'JetBrains Mono',
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Transcribing Urdu audio signal...',
+            style: TextStyle(
+              color: MuhafizTheme.mutedSlate,
+              fontSize: 10,
+            ),
+          ),
+          const SizedBox(height: 24),
         ] else if (_isSubmitting) ...[
           SizedBox(
             width: 120,
@@ -530,14 +620,14 @@ class _VoiceReportScreenState extends State<VoiceReportScreen>
           const SizedBox(height: 24),
         ] else ...[
           Icon(
-            _speechAvailable ? LucideIcons.radioTower : LucideIcons.wifiOff,
+            _recorderReady ? LucideIcons.radioTower : LucideIcons.wifiOff,
             color: MuhafizTheme.mutedSlate,
             size: 36,
           ),
           const SizedBox(height: 16),
         ],
 
-        if (!_isSubmitting)
+        if (!_isSubmitting && !_isTranscribing)
           GestureDetector(
             onLongPressStart: (_) => _startRecording(),
             onLongPressEnd: (_) => _stopRecording(),
@@ -591,19 +681,19 @@ class _VoiceReportScreenState extends State<VoiceReportScreen>
             ),
           ),
 
-        if (!_isSubmitting) ...[
+        if (!_isSubmitting && !_isTranscribing) ...[
           const SizedBox(height: 24),
           Text(
             _isRecording
-                ? 'RELEASE TO STOP RECORDING'
-                : _speechAvailable
+                ? 'RELEASE TO STOP — GOOGLE STT WILL TRANSCRIBE'
+                : _recorderReady
                     ? 'HOLD TO RECORD EMERGENCY VOICE'
                     : 'MIC UNAVAILABLE — CHECK PERMISSIONS',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: _isRecording
                   ? const Color(0xFFEF4444)
-                  : _speechAvailable
+                  : _recorderReady
                       ? Colors.white
                       : Colors.amber,
               fontFamily: 'JetBrains Mono',
@@ -615,8 +705,8 @@ class _VoiceReportScreenState extends State<VoiceReportScreen>
           const SizedBox(height: 8),
           Text(
             _isRecording
-                ? 'Speak clearly — Muhafiz STT is transcribing your signal in real-time.'
-                : 'Speak in Urdu or English. Your voice is parsed by the Sentinel Reasoning Agent.',
+                ? 'Speak in Urdu — Google STT will transcribe after you release.'
+                : 'Speak in Urdu (اردو). Google Cloud STT will process your voice.',
             textAlign: TextAlign.center,
             style: const TextStyle(
               color: MuhafizTheme.mutedSlate,
@@ -624,12 +714,12 @@ class _VoiceReportScreenState extends State<VoiceReportScreen>
               height: 1.4,
             ),
           ),
-          if (!_speechAvailable && !_speechInitializing) ...[
+          if (!_recorderReady) ...[
             const SizedBox(height: 20),
             OutlinedButton.icon(
-              onPressed: _initSpeech,
+              onPressed: _checkMicPermission,
               icon: const Icon(LucideIcons.refreshCw, size: 14),
-              label: const Text('RETRY INIT',
+              label: const Text('RETRY MIC',
                   style: TextStyle(fontFamily: 'JetBrains Mono', fontSize: 11)),
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.amber,
@@ -638,7 +728,7 @@ class _VoiceReportScreenState extends State<VoiceReportScreen>
               ),
             ),
           ],
-          if (!_isRecording && _transcribedText.isNotEmpty && !_speechInitializing) ...[
+          if (!_isRecording && _transcribedText.isNotEmpty) ...[
             const SizedBox(height: 20),
             ElevatedButton.icon(
               onPressed: _isSubmitting ? null : _submitVoiceReport,
@@ -822,15 +912,15 @@ class _VoiceReportScreenState extends State<VoiceReportScreen>
                     width: 6,
                     height: 6,
                     decoration: BoxDecoration(
-                      color: _isRecording ? Colors.red : MuhafizTheme.primaryEmerald,
+                      color: _isRecording ? Colors.red : _isTranscribing ? Colors.blue : MuhafizTheme.primaryEmerald,
                       shape: BoxShape.circle,
                     ),
                   ),
                   const SizedBox(width: 5),
                   Text(
-                    _isRecording ? 'LIVE STT' : 'STANDBY',
+                    _isRecording ? 'RECORDING' : _isTranscribing ? 'GOOGLE STT' : 'STANDBY',
                     style: TextStyle(
-                      color: _isRecording ? Colors.red : MuhafizTheme.primaryEmerald,
+                      color: _isRecording ? Colors.red : _isTranscribing ? Colors.blue : MuhafizTheme.primaryEmerald,
                       fontFamily: 'JetBrains Mono',
                       fontSize: 8,
                       fontWeight: FontWeight.bold,
@@ -845,23 +935,70 @@ class _VoiceReportScreenState extends State<VoiceReportScreen>
           const SizedBox(height: 8),
           Expanded(
             child: SingleChildScrollView(
-              child: Text(
-                _transcribedText.isNotEmpty
-                    ? _transcribedText
-                    : _isSubmitting
-                        ? 'PARSING COGNITIVE SIGNAL...'
-                        : _isLogged
-                            ? 'Signal archived to Sentinel audit log.'
-                            : _isTextMode
-                                ? 'Type emergency details above and hit transmit to send directly to the Sentinel Council...'
-                                : 'Hold the mic button and speak your emergency report in Urdu or English...',
-                style: TextStyle(
-                  color: _transcribedText.isNotEmpty ? Colors.white : MuhafizTheme.mutedSlate,
-                  fontFamily: 'JetBrains Mono',
-                  fontSize: 11,
-                  height: 1.5,
-                ),
-              ),
+              child: _originalUrdu.isNotEmpty
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Urdu text (Arabic script) — what was spoken
+                        Text(
+                          _originalUrdu,
+                          textDirection: TextDirection.rtl,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            height: 1.6,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const Divider(color: Color(0xFF13233F), height: 1),
+                        const SizedBox(height: 6),
+                        // English translation — what gets sent to server
+                        Row(
+                          children: [
+                            const Icon(LucideIcons.languages,
+                                color: MuhafizTheme.primaryEmerald, size: 10),
+                            const SizedBox(width: 4),
+                            const Text(
+                              'EN → SERVER',
+                              style: TextStyle(
+                                color: MuhafizTheme.primaryEmerald,
+                                fontFamily: 'JetBrains Mono',
+                                fontSize: 8,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _transcribedText,
+                          style: const TextStyle(
+                            color: MuhafizTheme.mutedSlate,
+                            fontFamily: 'JetBrains Mono',
+                            fontSize: 10,
+                            height: 1.5,
+                          ),
+                        ),
+                      ],
+                    )
+                  : Text(
+                      _isTranscribing
+                          ? 'Google STT transcribing + translating to English...'
+                          : _isSubmitting
+                              ? 'PARSING COGNITIVE SIGNAL...'
+                              : _isLogged
+                                  ? 'Signal archived to Sentinel audit log.'
+                                  : 'Hold mic and speak in Urdu — auto-translated to English for server.',
+                      style: TextStyle(
+                        color: _transcribedText.isNotEmpty
+                            ? Colors.white
+                            : MuhafizTheme.mutedSlate,
+                        fontFamily: 'JetBrains Mono',
+                        fontSize: 11,
+                        height: 1.5,
+                      ),
+                    ),
             ),
           ),
         ],

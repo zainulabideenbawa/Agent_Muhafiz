@@ -101,10 +101,10 @@ const DigitalTwinMap = ({ incidents, selectedIncident, onMarkerClick }) => {
                 >
                     {/* Incidents */}
                     {incidents.map((incident, idx) => (
-                        <Marker 
-                            key={`inc-${idx}`} 
-                            longitude={incident.location?.lng || 67.05} 
-                            latitude={incident.location?.lat || 24.89}
+                        <Marker
+                            key={`inc-${idx}`}
+                            longitude={incident.location_lng ?? incident.location?.lng ?? 67.05}
+                            latitude={incident.location_lat ?? incident.location?.lat ?? 24.89}
                             onClick={e => { 
                                 e.originalEvent.stopPropagation(); 
                                 setSelectedIncidentTooltip(incident);
@@ -127,8 +127,8 @@ const DigitalTwinMap = ({ incidents, selectedIncident, onMarkerClick }) => {
                     {/* Mini Incident Hover Popup */}
                     {hoveredIncident && (!selectedIncidentTooltip || selectedIncidentTooltip.id !== hoveredIncident.id) && (
                         <Popup
-                            longitude={hoveredIncident.location?.lng || 67.05}
-                            latitude={hoveredIncident.location?.lat || 24.89}
+                            longitude={hoveredIncident.location_lng ?? hoveredIncident.location?.lng ?? 67.05}
+                            latitude={hoveredIncident.location_lat ?? hoveredIncident.location?.lat ?? 24.89}
                             anchor="bottom"
                             closeButton={false}
                             closeOnClick={false}
@@ -148,8 +148,8 @@ const DigitalTwinMap = ({ incidents, selectedIncident, onMarkerClick }) => {
                     {/* Incident Tactical Tooltip Popup */}
                     {selectedIncidentTooltip && (
                         <Popup
-                            longitude={selectedIncidentTooltip.location?.lng || 67.05}
-                            latitude={selectedIncidentTooltip.location?.lat || 24.89}
+                            longitude={selectedIncidentTooltip.location_lng ?? selectedIncidentTooltip.location?.lng ?? 67.05}
+                            latitude={selectedIncidentTooltip.location_lat ?? selectedIncidentTooltip.location?.lat ?? 24.89}
                             anchor="bottom"
                             onClose={() => setSelectedIncidentTooltip(null)}
                             closeOnClick={false}

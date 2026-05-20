@@ -39,21 +39,44 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with TickerPr
   // Threat bypass route segments
   List<LatLng> _routePoints = [];
 
-  // Deterministic area geocoder mapping areas to Karachi coordinates
+  // Fallback geocoder — used only when backend has no GPS coords
+  // Mirrors QUICK_ZONES from the backend + local landmarks
   static const Map<String, LatLng> _geoMap = {
-    'Nipa Chowk': LatLng(24.9184, 67.0971),
-    'Hassan Square Chowk': LatLng(24.9036, 67.0620),
-    'Disco Bakery Chowk': LatLng(24.9150, 67.0930),
-    'Gulshan-e-Iqbal': LatLng(24.9180, 67.0971),
-    'Jauhar Chowrangi': LatLng(24.9126, 67.1226),
-    'Kamran Chowrangi': LatLng(24.9183, 67.1290),
-    'Perfume Chowk': LatLng(24.9080, 67.1190),
-    'Gulistan-e-Jauhar': LatLng(24.9123, 67.1234),
-    'Teen Talwar': LatLng(24.8436, 67.0336),
-    'Do Talwar': LatLng(24.8398, 67.0315),
-    'Schon Circle': LatLng(24.8290, 67.0360),
-    'Clifton': LatLng(24.8138, 67.0336),
-    'Karachi': LatLng(24.9000, 67.0900),
+    'Nipa Chowk':           LatLng(24.9184, 67.0971),
+    'NIPA Chowrangi':       LatLng(24.9184, 67.0971),
+    'Hassan Square':        LatLng(24.9036, 67.0620),
+    'Disco Bakery Chowk':   LatLng(24.9150, 67.0930),
+    'Gulshan-e-Iqbal':      LatLng(24.9180, 67.0971),
+    'Jauhar Chowrangi':     LatLng(24.9126, 67.1226),
+    'Gulistan-e-Jauhar':    LatLng(24.9123, 67.1234),
+    'Kamran Chowrangi':     LatLng(24.9183, 67.1290),
+    'Perfume Chowk':        LatLng(24.9080, 67.1190),
+    'Saddar':               LatLng(24.8607, 67.0105),
+    'Burns Road':           LatLng(24.8622, 67.0195),
+    'Clifton':              LatLng(24.8138, 67.0336),
+    'Boat Basin':           LatLng(24.8193, 67.0279),
+    'Teen Talwar':          LatLng(24.8436, 67.0336),
+    'Do Talwar':            LatLng(24.8398, 67.0315),
+    'Schon Circle':         LatLng(24.8290, 67.0360),
+    'DHA Defence':          LatLng(24.7990, 67.0580),
+    'Liaquatabad':          LatLng(24.9084, 67.0476),
+    'Nazimabad':            LatLng(24.9135, 67.0285),
+    'Karsaz':               LatLng(24.8840, 67.0960),
+    'Korangi':              LatLng(24.8270, 67.1270),
+    'Landhi':               LatLng(24.8410, 67.1580),
+    'Orangi Town':          LatLng(24.9378, 66.9897),
+    'Malir':                LatLng(24.8820, 67.1930),
+    'F.B. Area':            LatLng(24.9310, 67.0680),
+    'University Road':      LatLng(24.9270, 67.1080),
+    'M.A. Jinnah Road':     LatLng(24.8590, 67.0150),
+    'S.I.T.E.':             LatLng(24.9150, 66.9890),
+    'Lyari':                LatLng(24.8740, 66.9960),
+    'Baldia Town':          LatLng(24.9020, 66.9740),
+    'Surjani Town':         LatLng(25.0070, 67.0380),
+    'North Karachi':        LatLng(24.9870, 67.0610),
+    'North Nazimabad':      LatLng(24.9460, 67.0400),
+    'Johar':                LatLng(24.9123, 67.1234),
+    'Karachi':              LatLng(24.9000, 67.0900),
   };
 
   LatLng _geocode(String name) {
@@ -139,7 +162,12 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with TickerPr
               _safeString(dataField is Map ? dataField['summary'] : null) ??
               'Analyst Agent scanning area.';
 
-          final LatLng coord = _geocode(locationName);
+          // Prefer real GPS coords from Sentinel agent; fall back to text geocoder
+          final dynamic rawLat = item['location_lat'];
+          final dynamic rawLng = item['location_lng'];
+          final LatLng coord = (rawLat is num && rawLng is num)
+              ? LatLng(rawLat.toDouble(), rawLng.toDouble())
+              : _geocode(locationName);
 
           // Only include incidents within 5km of the citizen
           final double distMeters = _distanceBetween(_citizenLatLng, coord);
@@ -549,6 +577,7 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with TickerPr
         TileLayer(
           urlTemplate: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
           subdomains: const ['a', 'b', 'c', 'd'],
+          retinaMode: RetinaMode.isHighDensity(context),
         ),
         // Active Danger Zone Overlays
         CircleLayer(circles: circleMarkers),

@@ -68,6 +68,11 @@ router.get('/', async (req, res) => {
             const cls = d.classification || {};
             const actionPlan = d.action_plan || {};
             const impact = d.impact_analysis || {};
+            // Real GPS coords from Sentinel agent (via Google Maps geocoding)
+            const clsLoc = cls.location || {};
+            const locationLat = typeof clsLoc.lat === 'number' ? clsLoc.lat : null;
+            const locationLng = typeof clsLoc.lng === 'number' ? clsLoc.lng : null;
+
             return {
                 ...inc,
                 // Standardized confidence — pulled from wherever the agent stored it
@@ -76,7 +81,10 @@ router.get('/', async (req, res) => {
                 type: (inc.type && inc.type !== 'UNKNOWN') ? inc.type : (cls.type || 'UNKNOWN'),
                 location: (inc.location && inc.location !== 'ANALYZING')
                     ? inc.location
-                    : (cls.location?.landmark || d.location || 'ANALYZING'),
+                    : (clsLoc.landmark || d.location || 'ANALYZING'),
+                // Real GPS coordinates — populated by Sentinel agent via Google Maps geocoding
+                location_lat: locationLat,
+                location_lng: locationLng,
                 // Surface useful agent outputs to top level for Flutter apps
                 instructions: actionPlan.tactical_directive || null,
                 equipment: Array.isArray(actionPlan.deployment?.units)

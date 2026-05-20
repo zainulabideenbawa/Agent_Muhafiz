@@ -45,11 +45,13 @@ class OfficerAuthService {
   static Future<Map<String, dynamic>?> getSavedSession() async {
     final prefs = await SharedPreferences.getInstance();
     final email = prefs.getString('officer_email');
-    if (email == null) return null;
+    final token = prefs.getString('auth_token');
+    if (email == null || token == null || token.isEmpty) return null;
     return {
       'email': email,
       'name': prefs.getString('officer_name') ?? 'Officer',
       'role': prefs.getString('officer_role') ?? 'OFFICER',
+      'token': token,
     };
   }
 

@@ -10,6 +10,7 @@ import 'package:geolocator/geolocator.dart' as geo;
 import '../theme.dart';
 import '../services/geocoding_service.dart';
 import '../services/api_service.dart';
+import '../services/auth_service.dart';
 import '../services/socket_service.dart';
 import 'ground_truth_screen.dart';
 import 'verification_quest_screen.dart';
@@ -87,6 +88,12 @@ class _DispatchInboxScreenState extends State<DispatchInboxScreen>
         _mapController.move(_officerLatLng, 13.5);
       }
     } catch (_) {}
+  }
+
+  Future<void> _logout() async {
+    await OfficerAuthService.logout();
+    if (!mounted) return;
+    Navigator.of(context).pushReplacementNamed('/login');
   }
 
   Future<void> _fetchData() async {
@@ -259,6 +266,15 @@ class _DispatchInboxScreenState extends State<DispatchInboxScreen>
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
             ),
+            const SizedBox(width: 8),
+            IconButton(
+              icon: const Icon(LucideIcons.logOut,
+                  color: MuhafizTheme.textSecondary, size: 18),
+              onPressed: _logout,
+              tooltip: 'Logout',
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+            ),
           ],
         ),
       ),
@@ -384,6 +400,7 @@ class _DispatchInboxScreenState extends State<DispatchInboxScreen>
               urlTemplate:
                   'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
               subdomains: const ['a', 'b', 'c', 'd'],
+              retinaMode: RetinaMode.isHighDensity(context),
             ),
             CircleLayer(circles: circles),
             MarkerLayer(markers: markers),

@@ -423,6 +423,7 @@ class _GroundTruthScreenState extends State<GroundTruthScreen>
                 urlTemplate:
                     'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
                 subdomains: const ['a', 'b', 'c', 'd'],
+                retinaMode: RetinaMode.isHighDensity(context),
               ),
               CircleLayer(circles: [
                 CircleMarker(

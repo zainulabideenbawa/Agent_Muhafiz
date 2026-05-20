@@ -1,0 +1,12 @@
+{
+    "configurations": [
+        {
+            "name": "muhafiz_mobile",
+            "request": "launch",
+            "type": "dart",
+            "args": [
+                "--dart-define=GOOGLE_API_KEY=AIzaSyDTwgei_fdUEdE3B1PXD5vZqdXef5J2HrM"
+            ]
+        }
+    ]
+}
