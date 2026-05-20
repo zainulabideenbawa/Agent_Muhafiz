@@ -3,6 +3,8 @@
  * These functions connect the Agents to the Backend REST APIs.
  */
 
+import { updateApiHealth } from './health_monitor.js';
+
 const BACKEND_URL = "http://127.0.0.1:3001";
 
 /**
@@ -44,25 +46,33 @@ export const get_city_vitals = async (location) => {
  * @returns {{ eta_mins: number, distance_km: number, delay_mins: number, source: string }}
  */
 export const get_route_eta = async (fromLat, fromLng, toLat, toLng) => {
+    const start = Date.now();
     const TOMTOM_KEY = process.env.TOMTOM_API_KEY;
     if (!TOMTOM_KEY) {
         const simEta = 10 + Math.floor(Math.random() * 20);
+        updateApiHealth('tomtom', true, 15);
         return { eta_mins: simEta, distance_km: null, delay_mins: 0, source: 'Simulated' };
     }
     try {
         const url = `https://api.tomtom.com/routing/1/calculateRoute/${fromLat},${fromLng}:${toLat},${toLng}/json?key=${TOMTOM_KEY}&traffic=true&travelMode=van`;
         const res = await fetch(url);
-        const data = await res.json();
-        const summary = data.routes?.[0]?.summary;
-        if (summary) {
-            const eta_mins = Math.round(summary.travelTimeInSeconds / 60);
-            const distance_km = Math.round(summary.lengthInMeters / 100) / 10;
-            const delay_mins = Math.round((summary.trafficDelayInSeconds || 0) / 60);
-            console.log(`[TomTom ETA] ✅ ${distance_km}km → ${eta_mins} min (delay: ${delay_mins} min)`);
-            return { eta_mins, distance_km, delay_mins, source: 'TomTom Routing API (live)' };
+        const elapsed = Date.now() - start;
+        if (res.status === 200) {
+            const data = await res.json();
+            const summary = data.routes?.[0]?.summary;
+            if (summary) {
+                const eta_mins = Math.round(summary.travelTimeInSeconds / 60);
+                const distance_km = Math.round(summary.lengthInMeters / 100) / 10;
+                const delay_mins = Math.round((summary.trafficDelayInSeconds || 0) / 60);
+                console.log(`[TomTom ETA] ✅ ${distance_km}km → ${eta_mins} min (delay: ${delay_mins} min)`);
+                updateApiHealth('tomtom', true, elapsed);
+                return { eta_mins, distance_km, delay_mins, source: 'TomTom Routing API (live)' };
+            }
         }
+        throw new Error(`TomTom API status: ${res.status}`);
     } catch (e) {
         console.warn(`[TomTom ETA] Failed: ${e.message}`);
+        updateApiHealth('tomtom', false, Date.now() - start);
     }
     return { eta_mins: 15, distance_km: null, delay_mins: 0, source: 'Fallback' };
 };
@@ -183,6 +193,7 @@ export const get_nearest_infrastructure = async (lat, lng, crisisType) => {
     const radius = 5000; // 5km search radius
 
     console.log(`[Overpass] Searching for nearest ${amenity} within ${radius}m of lat=${lat}, lng=${lng}`);
+    const start = Date.now();
 
     try {
         const query = `[out:json][timeout:10];node[amenity=${amenity}](around:${radius},${lat},${lng});out body 3;`;
@@ -198,6 +209,7 @@ export const get_nearest_infrastructure = async (lat, lng, crisisType) => {
                     body: `data=${encodeURIComponent(query)}`,
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
                 });
+                const elapsed = Date.now() - start;
                 const contentType = res.headers.get('content-type') || '';
                 if (!contentType.includes('application/json') && !contentType.includes('text/json')) {
                     console.warn(`[Overpass] ${endpoint} returned non-JSON (${contentType}), trying next endpoint.`);
@@ -212,8 +224,10 @@ export const get_nearest_infrastructure = async (lat, lng, crisisType) => {
                         type: amenity,
                     }));
                     console.log(`[Overpass] ✅ Found ${results.length} ${amenity}(s): ${results.map(r => r.name).join(', ')}`);
+                    updateApiHealth('openstreetmap', true, elapsed);
                     return { found: true, results, amenity };
                 }
+                updateApiHealth('openstreetmap', true, elapsed);
                 break; // got valid JSON but 0 results — stop trying
             } catch (innerErr) {
                 console.warn(`[Overpass] ${endpoint} error: ${innerErr.message}`);
@@ -223,6 +237,7 @@ export const get_nearest_infrastructure = async (lat, lng, crisisType) => {
         console.warn(`[Overpass] Outer query error: ${e.message}`);
     }
 
+    updateApiHealth('openstreetmap', false, Date.now() - start);
     return { found: false, results: [], amenity };
 };
 
@@ -233,9 +248,11 @@ export const get_nearest_infrastructure = async (lat, lng, crisisType) => {
  */
 export const get_rainfall_forecast = async (lat, lng) => {
     console.log(`[Open-Meteo] Fetching 6h rainfall forecast for lat=${lat}, lng=${lng}`);
+    const start = Date.now();
     try {
         const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&hourly=precipitation,temperature_2m,relativehumidity_2m&forecast_days=1&timezone=Asia%2FKarachi`;
         const res = await fetch(url);
+        const elapsed = Date.now() - start;
         const data = await res.json();
 
         if (data.hourly) {
@@ -249,6 +266,7 @@ export const get_rainfall_forecast = async (lat, lng) => {
             const currentHumidity = data.hourly.relativehumidity_2m[currentHour];
 
             console.log(`[Open-Meteo] ✅ Next 6h rainfall: ${totalRain.toFixed(1)}mm total, peak ${peakRain.toFixed(1)}mm/h`);
+            updateApiHealth('openmeteo', true, elapsed);
             return {
                 source: 'Open-Meteo (live forecast)',
                 total_rainfall_6h_mm: parseFloat(totalRain.toFixed(1)),
@@ -258,8 +276,10 @@ export const get_rainfall_forecast = async (lat, lng) => {
                 flood_risk: totalRain > 20 ? 'HIGH' : totalRain > 5 ? 'MODERATE' : 'LOW',
             };
         }
+        throw new Error("Invalid hourly payload structure from Open-Meteo");
     } catch (e) {
         console.warn(`[Open-Meteo] Failed: ${e.message}`);
+        updateApiHealth('openmeteo', false, Date.now() - start);
     }
     return { source: 'unavailable', total_rainfall_6h_mm: 0, flood_risk: 'UNKNOWN' };
 };
@@ -271,22 +291,30 @@ export const get_rainfall_forecast = async (lat, lng) => {
  */
 export const check_nasa_firms_fire = async (lat, lng) => {
     console.log(`[NASA FIRMS] Checking satellite fire data for lat=${lat}, lng=${lng}`);
+    const start = Date.now();
     try {
         const nasaKey = process.env.NASA_FIRMS_KEY || 'DEMO_KEY';
         // VIIRS satellite, 1-day lookback, 0.5 degree radius (~55km)
         const url = `https://firms.modaps.eosdis.nasa.gov/api/area/csv/${nasaKey}/VIIRS_SNPP_NRT/${lng - 0.5},${lat - 0.5},${lng + 0.5},${lat + 0.5}/1`;
         const res = await fetch(url);
+        const elapsed = Date.now() - start;
+        if (res.status !== 200) {
+            throw new Error(`NASA FIRMS API returned status ${res.status}`);
+        }
         const text = await res.text();
         const lines = text.trim().split('\n').filter(l => !l.startsWith('latitude'));
 
         if (lines.length > 0 && lines[0].length > 5) {
             console.log(`[NASA FIRMS] ✅ ${lines.length} active fire pixel(s) detected by satellite near incident zone!`);
+            updateApiHealth('nasa_firms', true, elapsed);
             return { satellite_confirmed: true, fire_pixels: lines.length, source: 'NASA VIIRS Satellite (live)' };
         }
         console.log(`[NASA FIRMS] No active fire pixels detected in satellite data.`);
+        updateApiHealth('nasa_firms', true, elapsed);
         return { satellite_confirmed: false, fire_pixels: 0, source: 'NASA VIIRS Satellite (live)' };
     } catch (e) {
         console.warn(`[NASA FIRMS] Query failed: ${e.message}`);
+        updateApiHealth('nasa_firms', false, Date.now() - start);
         return { satellite_confirmed: false, fire_pixels: 0, source: 'unavailable' };
     }
 };

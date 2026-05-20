@@ -64,15 +64,91 @@ const TACTICAL_TEMPLATES = {
         `6. ETA: ${eta} minutes to scene from ${hub}.`,
 };
 
-const getClosestHub = (dept, incidentLat, incidentLng) => {
-    const hubs = KARACHI_HUBS[dept] || KARACHI_HUBS.RESCUE_1122;
-    let closest = hubs[0];
-    let minDist = Infinity;
-    for (const hub of hubs) {
-        const dist = Math.sqrt(Math.pow(hub.lat - incidentLat, 2) + Math.pow(hub.lng - incidentLng, 2));
-        if (dist < minDist) { minDist = dist; closest = hub; }
+import { getDepartmentResources, updateDepartmentResources } from '../db/index.js';
+
+// Karachi coordinate lookup for database hubs
+const HUB_COORDINATES = {
+    'Gulshan': { lat: 24.9215, lng: 67.0900 },
+    'Saddar': { lat: 24.8739, lng: 67.0250 },
+    'Defence': { lat: 24.8250, lng: 67.0700 },
+    'Nazimabad': { lat: 24.9200, lng: 67.0300 },
+    'Landhi': { lat: 24.8500, lng: 67.1400 },
+    'Clifton': { lat: 24.8200, lng: 67.0300 }
+};
+
+const selectHubWithResources = async (dept, incidentLat, incidentLng, crisisType) => {
+    // 1. Fetch live hubs from DB
+    const hubs = await getDepartmentResources(dept);
+    
+    // Sort by distance (closest first)
+    const hubsWithDist = hubs.map(h => {
+        const coords = HUB_COORDINATES[h.location] || { lat: 24.8607, lng: 67.0011 };
+        const dist = Math.sqrt(Math.pow(coords.lat - incidentLat, 2) + Math.pow(coords.lng - incidentLng, 2));
+        return { ...h, lat: coords.lat, lng: coords.lng, distance: dist };
+    });
+    
+    if (hubsWithDist.length === 0) {
+        // Ultimate fallback
+        return {
+            selectedHub: { id: 'FB-CEN', name: 'Central Fire Station', location: 'Saddar', lat: 24.8739, lng: 67.0250, trucks: 5, ambulances: 2, officers: 20 },
+            warning: null,
+            allHubs: [],
+            requirements: { trucks: 0, ambulances: 0, officers: 0 }
+        };
     }
-    return closest;
+
+    hubsWithDist.sort((a, b) => a.distance - b.distance);
+
+    // 2. Determine resource requirements based on crisis type
+    const type = (crisisType || "").toLowerCase();
+    const reqTrucks = (type === 'fire' || type === 'flood') ? 1 : 0;
+    const reqAmbulances = (type === 'blast' || type === 'protest' || type === 'flood') ? 1 : 0;
+    const reqOfficers = type === 'fire' ? 5 : (type === 'blast' || type === 'protest') ? 5 : 3;
+
+    // 3. Try closest hub first
+    const primaryHub = hubsWithDist[0];
+    const hasEnough = (primaryHub.trucks >= reqTrucks) && 
+                      (primaryHub.ambulances >= reqAmbulances) && 
+                      (primaryHub.officers >= reqOfficers);
+
+    if (hasEnough) {
+        return {
+            selectedHub: primaryHub,
+            warning: null,
+            allHubs: hubsWithDist,
+            requirements: { trucks: reqTrucks, ambulances: reqAmbulances, officers: reqOfficers }
+        };
+    }
+
+    // Proximity fallback: find first hub that satisfies requirements
+    for (let i = 1; i < hubsWithDist.length; i++) {
+        const backupHub = hubsWithDist[i];
+        const backupHasEnough = (backupHub.trucks >= reqTrucks) && 
+                                (backupHub.ambulances >= reqAmbulances) && 
+                                (backupHub.officers >= reqOfficers);
+        if (backupHasEnough) {
+            const warning = `⚠️ RESOURCE DEPLETION ALERT: Nearest station (${primaryHub.name}) has exhausted its fleet. Rerouting dispatch to secondary station (${backupHub.name}) at ${backupHub.location}.`;
+            return {
+                selectedHub: backupHub,
+                warning,
+                allHubs: hubsWithDist,
+                requirements: { trucks: reqTrucks, ambulances: reqAmbulances, officers: reqOfficers }
+            };
+        }
+    }
+
+    // All hubs exhausted - dispatch closest anyway with critical warning
+    const warning = `🚨 CRITICAL DEPLETION: All hubs for ${dept} are at maximum capacity! Dispatching emergency backup units from closest station (${primaryHub.name}) under degraded availability.`;
+    return {
+        selectedHub: primaryHub,
+        warning,
+        allHubs: hubsWithDist,
+        requirements: {
+            trucks: Math.min(primaryHub.trucks, reqTrucks),
+            ambulances: Math.min(primaryHub.ambulances, reqAmbulances),
+            officers: Math.min(primaryHub.officers, reqOfficers)
+        }
+    };
 };
 
 export const strategist = async (state) => {
@@ -91,16 +167,18 @@ export const strategist = async (state) => {
         ? nearbyInfra.results[0].name
         : null;
 
-    // Identify closest hub and get real TomTom ETA
-    const closestHub = getClosestHub(dept, lat, lng);
-    const routeEta = await get_route_eta(closestHub.lat, closestHub.lng, lat, lng);
+    // Identify closest hub under live resource constraints
+    const { selectedHub, warning, allHubs, requirements } = await selectHubWithResources(dept, lat, lng, crisisType);
+
+    // Get real TomTom ETA from the selected hub to incident coords
+    const routeEta = await get_route_eta(selectedHub.lat, selectedHub.lng, lat, lng);
     const etaMins = routeEta.eta_mins;
     const etaLabel = routeEta.source !== 'Simulated'
         ? `${etaMins} min (TomTom live-traffic verified)`
         : `${etaMins} min (estimated)`;
 
-    console.log(`[Strategist] Closest hub: "${closestHub.name}" → ETA ${etaLabel}`);
-    if (nearestFacility) console.log(`[Strategist/Overpass] Nearest ${nearbyInfra.amenity}: "${nearestFacility}"`);
+    console.log(`[Strategist] Selected hub: "${selectedHub.name}" → ETA ${etaLabel}`);
+    if (warning) console.warn(`[Strategist] ${warning}`);
 
     // Get route intel from triage
     const routePrimary = triage.route_directive?.primary_route || zoneIntel.key_roads?.[0] || 'Shara-e-Faisal (M-9 Corridor)';
@@ -119,45 +197,53 @@ export const strategist = async (state) => {
 
     // Build tactical directive
     const tacticalFn = TACTICAL_TEMPLATES[crisisType] || TACTICAL_TEMPLATES.flood;
-    const tacticalDirective = tacticalFn(landmark, closestHub.name, etaMins, routePrimary, routeAvoid, policeBlock, nearestHospital);
+    const tacticalDirective = tacticalFn(landmark, selectedHub.name, etaMins, routePrimary, routeAvoid, policeBlock, nearestHospital);
 
     const heuristicPlan = {
         priority_level: (state.classification?.urgency || 0) >= 8 ? 'CRITICAL' : 'HIGH',
         deployment: {
-            hub: closestHub.name,
-            hub_address: closestHub.address,
+            hub: selectedHub.name,
+            hub_address: selectedHub.location,
             units: selectedUnits,
             eta_mins: etaMins,
             eta_label: etaLabel,
             distance_km: routeEta.distance_km,
             traffic_delay_mins: routeEta.delay_mins,
             route_source: routeEta.source,
+            resources_allocated: {
+                hubId: selectedHub.id,
+                dept: dept,
+                trucks: requirements.trucks,
+                ambulances: requirements.ambulances,
+                officers: requirements.officers
+            }
         },
         tactical_directive: tacticalDirective,
         inter_agency_coordination: triage.police_notification || `Notify ${policeBlock} for route clearance. Coordinate with ${nearestHospital} for casualty intake.`,
         nearest_facility: nearestFacility ? `${nearestFacility} (OpenStreetMap verified)` : nearestHospital,
-        reasoning: `Deployed from "${closestHub.name}" (${closestHub.address}) — closest ${dept.replace(/_/g, ' ')} hub to ${landmark}. ` +
+        reasoning: (warning ? `[RESOURCE TRADE-OFF] ${warning} ` : '') +
+            `Deployed from "${selectedHub.name}" (${selectedHub.location}) — closest available ${dept.replace(/_/g, ' ')} hub to ${landmark}. ` +
             `Real-time TomTom routing via ${routePrimary}: ETA ${etaLabel}. ` +
             `Traffic diversion: avoid ${routeAvoid}. Police block required at: ${policeBlock}. ` +
-            `Nearest ${nearbyInfra.amenity || 'hospital'}: ${nearestHospital}. ` +
-            `${routeEta.delay_mins > 0 ? `Current traffic delay: ${routeEta.delay_mins} min — police route clearance critical.` : 'Route currently clear.'}`,
+            `Nearest ${nearbyInfra.amenity || 'hospital'}: ${nearestHospital}.`
     };
 
     const prompt = `You are the Sovereign Strategist for Karachi ${dept}.
     LOCATION: ${landmark}
     CRISIS TYPE: ${crisisType.toUpperCase()}
-    CLOSEST HUB: ${JSON.stringify(closestHub)}
+    SELECTED HUB: ${JSON.stringify(selectedHub)}
     TRIAGE ROUTE INTEL: ${JSON.stringify(triage.route_directive || {})}
     ZONE INTEL: ${JSON.stringify(zoneIntel)}
     REAL ETA (TomTom): ${etaLabel}
     NEAREST FACILITY (OpenStreetMap): ${nearestFacility || 'not found'}
+    WARNING: ${warning || 'none'}
     
     TASK — Be specific, use real addresses:
     1. Confirm the exact hub, list named units with capacities.
     2. Specify turn-by-turn route from hub to scene using real Karachi road names.
     3. State police clearance required at which exact intersection.
     4. Write a tactical directive for field officers (numbered steps).
-    5. State inter-agency coordination needed.
+    5. State inter-agency coordination needed. Include resource warnings if applicable.
     
     Respond ONLY in valid JSON: {
         "priority_level": string, "deployment": { "hub": string, "hub_address": string, "units": [string], "eta_mins": number, "eta_label": string },
@@ -173,16 +259,37 @@ export const strategist = async (state) => {
         result = heuristicPlan;
     }
 
+    // Merge resources_allocated into final result
+    if (!result.deployment) result.deployment = {};
+    result.deployment.resources_allocated = heuristicPlan.deployment.resources_allocated;
+
     const unitsDispatched = Array.isArray(result.deployment?.units)
         ? result.deployment.units.join(', ')
         : 'Emergency Units';
 
     console.log(`[Agent: The Strategist] Hub: "${result.deployment?.hub}" — ETA: ${result.deployment?.eta_mins} min — Units: ${unitsDispatched}`);
 
+    // Deduct live resources in DB
+    if (allHubs.length > 0) {
+        const updatedHubs = allHubs.map(h => {
+            if (h.id === selectedHub.id) {
+                return {
+                    ...h,
+                    trucks: Math.max(0, h.trucks - requirements.trucks),
+                    ambulances: Math.max(0, h.ambulances - requirements.ambulances),
+                    officers: Math.max(0, h.officers - requirements.officers)
+                };
+            }
+            return h;
+        });
+        await updateDepartmentResources(dept, updatedHubs);
+        console.log(`[Strategist] Deducted resources from ${selectedHub.name}: Trucks -${requirements.trucks}, Ambulances -${requirements.ambulances}, Officers -${requirements.officers}`);
+    }
+
     const log = {
         timestamp: new Date().toISOString(),
         agent: 'The Strategist',
-        message: `🗺️ TACTICAL PLAN LOCKED — ${unitsDispatched} dispatched from ${result.deployment?.hub}. ETA: ${result.deployment?.eta_label || result.deployment?.eta_mins + ' min'}. Route: ${routePrimary}. Police block: ${policeBlock}.`,
+        message: (warning ? `⚠️ ${warning}\n` : '') + `🗺️ TACTICAL PLAN LOCKED — ${unitsDispatched} dispatched from ${result.deployment?.hub}. ETA: ${result.deployment?.eta_label || result.deployment?.eta_mins + ' min'}.`,
         outcome: 'Plan Locked',
         details: result,
     };

@@ -1,11 +1,61 @@
 import React, { useState, useEffect } from 'react';
-import Map, { Marker, Popup } from "react-map-gl/mapbox";
+import Map, { Marker, Popup, Source, Layer } from "react-map-gl/mapbox";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { Activity, Thermometer, Wind, Droplets, Flame, AlertTriangle, Shield, TrendingUp } from 'lucide-react';
+import { Activity, Thermometer, Wind, Droplets, Flame, AlertTriangle, Shield, TrendingUp, Heart } from 'lucide-react';
 import DeckGL from '@deck.gl/react';
 import { HeatmapLayer } from '@deck.gl/aggregation-layers';
 
 const MAPBOX_TOKEN = "pk.eyJ1IjoiemFpbmJhd2EiLCJhIjoiY21wNzd3dHA5MDE1djJycXVmMXk3NW5yOSJ9.YDIdVPYdoQeSkqTVArC2TA";
+
+const HOSPITALS = [
+    { id: 'HOSP-001', name: 'Aga Khan University Hospital (AKUH)', type: 'LEVEL_1_TRAUMA', lng: 67.0747, lat: 24.8922 },
+    { id: 'HOSP-002', name: 'Indus Hospital (Korangi)', type: 'REGIONAL_TRAUMA', lng: 67.1211, lat: 24.8504 },
+    { id: 'HOSP-003', name: 'Jinnah Postgraduate Medical Center (JPMC)', type: 'CIVIL_TRAUMA', lng: 67.0426, lat: 24.8528 }
+];
+
+const resolveHubCoordinates = (hubName, dept) => {
+    const name = (hubName || "").toLowerCase();
+    if (name.includes("saddar") || name.includes("fire station road")) return { lng: 67.0250, lat: 24.8739 };
+    if (name.includes("site")) return { lng: 67.0100, lat: 24.9200 };
+    if (name.includes("landhi")) return { lng: 67.1400, lat: 24.8500 };
+    if (name.includes("nipa")) return { lng: 67.0900, lat: 24.9215 };
+    if (name.includes("cpo") || name.includes("police office")) return { lng: 67.0340, lat: 24.8740 };
+    if (name.includes("sohrab goth") || name.includes("edhi")) return { lng: 67.0600, lat: 24.9500 };
+    
+    // Fallback based on department
+    if (dept === 'FIRE_BRIGADE') return { lng: 67.0250, lat: 24.8739 };
+    if (dept === 'POLICE_FORCE') return { lng: 67.0340, lat: 24.8740 };
+    if (dept === 'RESCUE_1122') return { lng: 67.0900, lat: 24.9215 };
+    return { lng: 67.0900, lat: 24.9215 }; // Default to Gulshan / NIPA
+};
+
+const generateRouteCoordinates = (start, end) => {
+    const mid1 = { lng: start.lng, lat: (start.lat + end.lat) / 2 };
+    const mid2 = { lng: end.lng, lat: (start.lat + end.lat) / 2 };
+    return [
+        [start.lng, start.lat],
+        [mid1.lng, mid1.lat],
+        [mid2.lng, mid2.lat],
+        [end.lng, end.lat]
+    ];
+};
+
+const generateAlternativeRouteCoordinates = (start, end) => {
+    const deltaLng = end.lng - start.lng;
+    const deltaLat = end.lat - start.lat;
+    
+    // Middle point offset to represent an alternate highway / corridor detour
+    const midLng = start.lng + deltaLng * 0.4 - deltaLat * 0.25;
+    const midLat = start.lat + deltaLat * 0.6 + deltaLng * 0.25;
+    
+    return [
+        [start.lng, start.lat],
+        [start.lng + deltaLng * 0.2, start.lat + deltaLat * 0.2],
+        [midLng, midLat],
+        [start.lng + deltaLng * 0.8, start.lat + deltaLat * 0.8],
+        [end.lng, end.lat]
+    ];
+};
 
 const DigitalTwinMap = ({ incidents, selectedIncident, onMarkerClick }) => {
     const [viewState, setViewState] = useState({
@@ -21,6 +71,10 @@ const DigitalTwinMap = ({ incidents, selectedIncident, onMarkerClick }) => {
     const [selectedIncidentTooltip, setSelectedIncidentTooltip] = useState(null);
     const [hoveredIncident, setHoveredIncident] = useState(null);
     const [showRiskMap, setShowRiskMap] = useState(false);
+    const [selectedHospital, setSelectedHospital] = useState(null);
+
+    const [routeGeoJson, setRouteGeoJson] = useState(null);
+    const [blockedRouteGeoJson, setBlockedRouteGeoJson] = useState(null);
 
     useEffect(() => {
         if (selectedIncident && selectedIncident.location) {
@@ -31,6 +85,49 @@ const DigitalTwinMap = ({ incidents, selectedIncident, onMarkerClick }) => {
                 zoom: 13.5,
                 transitionDuration: 1500
             }));
+
+            const hubName = selectedIncident.data?.action_plan?.deployment?.hub;
+            const hubCoords = resolveHubCoordinates(hubName, selectedIncident.department);
+            const incCoords = { lng: selectedIncident.location.lng, lat: selectedIncident.location.lat };
+            
+            const hasSimulation = selectedIncident.data?.simulation || selectedIncident.data?.oracle_reroute;
+            
+            if (hasSimulation) {
+                const altCoords = generateAlternativeRouteCoordinates(hubCoords, incCoords);
+                const origCoords = generateRouteCoordinates(hubCoords, incCoords);
+                
+                setRouteGeoJson({
+                    type: 'Feature',
+                    properties: {},
+                    geometry: {
+                        type: 'LineString',
+                        coordinates: altCoords
+                    }
+                });
+                
+                setBlockedRouteGeoJson({
+                    type: 'Feature',
+                    properties: {},
+                    geometry: {
+                        type: 'LineString',
+                        coordinates: origCoords
+                    }
+                });
+            } else {
+                const coords = generateRouteCoordinates(hubCoords, incCoords);
+                setRouteGeoJson({
+                    type: 'Feature',
+                    properties: {},
+                    geometry: {
+                        type: 'LineString',
+                        coordinates: coords
+                    }
+                });
+                setBlockedRouteGeoJson(null);
+            }
+        } else {
+            setRouteGeoJson(null);
+            setBlockedRouteGeoJson(null);
         }
     }, [selectedIncident]);
 
@@ -99,6 +196,47 @@ const DigitalTwinMap = ({ incidents, selectedIncident, onMarkerClick }) => {
                     mapStyle="mapbox://styles/mapbox/dark-v11"
                     mapboxAccessToken={MAPBOX_TOKEN}
                 >
+                    {/* Blocked Original Route corridor rendering */}
+                    {blockedRouteGeoJson && (
+                        <Source id="blocked-route-source" type="geojson" data={blockedRouteGeoJson}>
+                            <Layer
+                                id="blocked-route-line"
+                                type="line"
+                                paint={{
+                                    'line-color': '#ef4444',
+                                    'line-width': 4,
+                                    'line-opacity': 0.85,
+                                    'line-dasharray': [1, 2]
+                                }}
+                            />
+                        </Source>
+                    )}
+
+                    {/* Active routing corridors rendering */}
+                    {routeGeoJson && (
+                        <Source id="route-source" type="geojson" data={routeGeoJson}>
+                            <Layer
+                                id="route-glow"
+                                type="line"
+                                paint={{
+                                    'line-color': '#10b981',
+                                    'line-width': 8,
+                                    'line-opacity': 0.25,
+                                    'line-blur': 4
+                                }}
+                            />
+                            <Layer
+                                id="route-line"
+                                type="line"
+                                paint={{
+                                    'line-color': '#10b981',
+                                    'line-width': 3,
+                                    'line-dasharray': [2, 2]
+                                }}
+                            />
+                        </Source>
+                    )}
+
                     {/* Incidents */}
                     {incidents.map((incident, idx) => (
                         <Marker 
@@ -123,6 +261,58 @@ const DigitalTwinMap = ({ incidents, selectedIncident, onMarkerClick }) => {
                             </div>
                         </Marker>
                     ))}
+
+                    {/* Hospital Hubs (Legend alignment) */}
+                    {HOSPITALS.map((hosp) => (
+                        <Marker
+                            key={hosp.id}
+                            longitude={hosp.lng}
+                            latitude={hosp.lat}
+                            onClick={e => {
+                                e.originalEvent.stopPropagation();
+                                setSelectedHospital(hosp);
+                            }}
+                        >
+                            <div className="flex flex-col items-center cursor-pointer relative">
+                                <div className="animate-pulse absolute w-6 h-6 rounded-full opacity-35 bg-emerald-500" />
+                                <div className="w-3.5 h-3.5 rounded-full border border-emerald-400 bg-emerald-950 flex items-center justify-center text-emerald-400 hover:scale-110 transition-transform">
+                                    <Heart size={7} />
+                                </div>
+                            </div>
+                        </Marker>
+                    ))}
+
+                    {/* Hospital Popup Tooltip */}
+                    {selectedHospital && (
+                        <Popup
+                            longitude={selectedHospital.lng}
+                            latitude={selectedHospital.lat}
+                            anchor="bottom"
+                            onClose={() => setSelectedHospital(null)}
+                            closeOnClick={false}
+                        >
+                            <div className="w-[200px] bg-zinc-950/95 border border-emerald-500/20 rounded-2xl backdrop-blur-3xl p-4 shadow-2xl flex flex-col gap-2 text-zinc-300 pointer-events-auto">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[7px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1">
+                                        🏥 MEDICAL GRID
+                                    </span>
+                                    <button 
+                                        onClick={() => setSelectedHospital(null)} 
+                                        className="text-zinc-500 hover:text-white transition-all text-[8px] bg-white/5 w-4 h-4 rounded-full flex items-center justify-center"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                                <div className="flex flex-col">
+                                    <h4 className="text-white text-[10px] font-black uppercase leading-tight">{selectedHospital.name}</h4>
+                                    <span className="text-[7px] font-mono text-zinc-500 mt-0.5">STATUS: EMERGENCY DEPT SYNCD</span>
+                                </div>
+                                <div className="p-2 bg-emerald-500/5 border border-emerald-500/10 rounded-lg text-[8px] font-mono text-emerald-400">
+                                    Capacity Status: OPTIMAL
+                                </div>
+                            </div>
+                        </Popup>
+                    )}
 
                     {/* Mini Incident Hover Popup */}
                     {hoveredIncident && (!selectedIncidentTooltip || selectedIncidentTooltip.id !== hoveredIncident.id) && (
@@ -181,7 +371,7 @@ const DigitalTwinMap = ({ incidents, selectedIncident, onMarkerClick }) => {
                                     <div className="bg-white/[0.02] border border-white/5 rounded-xl p-3 flex flex-col gap-1">
                                         <span className="text-[7px] text-zinc-500 block uppercase font-bold tracking-wider">Triage Level</span>
                                         <span className="text-red-400 font-mono text-[10px] font-black flex items-center gap-1">
-                                            <AlertTriangle size={8} /> Level 8
+                                            <AlertTriangle size={8} /> Level {selectedIncidentTooltip.data?.classification?.urgency || 8}
                                         </span>
                                     </div>
                                     <div className="bg-white/[0.02] border border-white/5 rounded-xl p-3 flex flex-col gap-1">

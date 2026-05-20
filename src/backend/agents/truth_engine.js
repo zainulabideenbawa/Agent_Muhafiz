@@ -8,25 +8,62 @@ export const truthEngine = async (state) => {
     const loc = state.classification?.location;
     const landmark = (loc && typeof loc === 'object' ? loc.landmark : loc) || "Karachi";
 
+    // Human-in-the-Loop Override
+    const isOfficerConfirmed = state.officer_status === 'CONFIRMED' || state.classification?.officer_status === 'CONFIRMED';
+    if (isOfficerConfirmed) {
+        console.log(`[Agent: The Truth-Engine] Ground truth verified on-scene by field officer for ${landmark}. Setting confidence to 1.0.`);
+        const log = {
+            timestamp: new Date().toISOString(),
+            agent: "The Truth-Engine",
+            message: `✅ Crisis at ${landmark} verified by on-scene field responder. Telemetry override: Confidence locked at 1.0. Proceeding to dispatch.`,
+            outcome: "Verified",
+            details: {
+                verdict: "Verified",
+                confidence_level: 1.0,
+                officer_override: true
+            }
+        };
+        return {
+            metadata: { source_reliability: 1.0 },
+            classification: {
+                confidence_level: 1.0,
+                verification_sources: ["Field Officer Verification (Ground Truth)"],
+                verdict: "Verified",
+                twitter_posts: []
+            },
+            traceLogs: [log]
+        };
+    }
+
     const vitals = await get_city_vitals(landmark);
 
-    const systemPrompt = `You are the "Skeptic." Verify the signal against city vitals.
-    Vitals: ${JSON.stringify(vitals)}
-    Crisis: ${JSON.stringify(state.classification)}
-    Assign a confidence_level (0.0 to 1.0). If < 0.7, outcome is "False Positive".
-    Output ONLY JSON with: classification {confidence_level, verification_sources}, verdict (Verified/False Positive), reasoning (string).
-    Your reasoning should explain exactly how the telemetry vitals (AQI, Temp, or Humidity) correlate to confirm or dispute the reported crisis.`;
+    // Heuristic Sub-scoring calculations for fallback and consistency
+    const rawText = (state.signal?.raw_input || "").toLowerCase();
+    const hasUrgentKeywords = ["urgent", "immediately", "emergency", "aag", "dhamaka", "doob", "critical", "help", "blast", "fire", "danger"].some(kw => rawText.includes(kw));
+    const urgencyScore = hasUrgentKeywords ? 0.92 : 0.58;
 
-    // Dynamic Intelligent Validation Heuristics
+    const hasSpecificLandmark = landmark !== "Karachi";
+    const geoScore = hasSpecificLandmark ? 0.95 : 0.65;
+
     const crisisType = (state.classification?.type || "").toLowerCase();
     const isFire = crisisType.includes("fire");
+    const isFlood = crisisType.includes("flood");
     const isMajorCrisis = ["flood", "blast", "protest", "fire"].includes(crisisType);
+
+    // Contradiction detection: e.g. flooding reported when there is no rain and water levels are low
+    let contradictionScore = 0.05;
+    if (isFlood && vitals.rainfall_mm === 0 && vitals.water_level_cm < 10) {
+        contradictionScore = 0.78; // High contradiction
+    } else if (isFire && vitals.avg_temp < 25) {
+        contradictionScore = 0.35; // Moderate contradiction (indoor/small fire possible)
+    }
 
     let verifiedVerdict = "Verified";
     let calculatedConfidence = 0.85;
     let fallbackReason = `Heuristic telemetry validation confirmed normal thresholds for ${landmark}.`;
     let additionalSources = ["City Telemetry Grid", "Sensors Hub"];
     let twitterPosts = [];
+    let velocity = isMajorCrisis ? 35 : 8;
 
     if (isMajorCrisis) {
         // Perform reactive Twitter OSINT Verification
@@ -36,11 +73,13 @@ export const truthEngine = async (state) => {
         if (osintResult.verified && osintResult.posts.length > 0) {
             calculatedConfidence = 0.98;
             additionalSources.push("Twitter OSINT Verification");
+            velocity = Math.floor(45 + Math.random() * 75);
             
             const leadPost = osintResult.posts[0];
             fallbackReason = `Telemetry matched risk profile. Reconfirmed from Twitter: User ${leadPost.username} has also posted this related with hashtag ${leadPost.hashtag}. Post: "${leadPost.text}"`;
         } else {
             calculatedConfidence = 0.75;
+            velocity = Math.floor(10 + Math.random() * 15);
             fallbackReason = `Major crisis detected, but could not be verified on social channels. Local sensors nominal.`;
         }
 
@@ -78,17 +117,58 @@ export const truthEngine = async (state) => {
         }
     }
 
+    // Source credibility score logic
+    const sourceCredibilityScore = twitterPosts.length > 0 ? 0.92 : (isFire || isFlood ? 0.75 : 0.60);
+    const overallConfidence = calculatedConfidence;
+    const isSuspicious = overallConfidence < 0.8 || contradictionScore > 0.4;
+
     const defaultFallback = {
-        classification: { confidence_level: calculatedConfidence, verification_sources: additionalSources },
+        classification: {
+            confidence_level: overallConfidence,
+            verification_sources: additionalSources,
+            credibility: {
+                source_credibility: sourceCredibilityScore,
+                geolocation_confidence: geoScore,
+                urgency_language: urgencyScore,
+                mention_velocity: velocity,
+                contradiction_level: contradictionScore,
+                suspicious_signal: isSuspicious
+            }
+        },
         verdict: verifiedVerdict,
         reasoning: fallbackReason
     };
+
+    const systemPrompt = `You are the "Skeptic." Verify the emergency signal against city telemetry vitals.
+    Vitals: ${JSON.stringify(vitals)}
+    Crisis: ${JSON.stringify(state.classification)}
+    Assign a confidence_level (0.0 to 1.0). If < 0.7, outcome is "False Positive".
+    
+    Output ONLY valid JSON with this format:
+    {
+       "classification": {
+          "confidence_level": number,
+          "verification_sources": ["string"],
+          "credibility": {
+             "source_credibility": number,
+             "geolocation_confidence": number,
+             "urgency_language": number,
+             "mention_velocity": number,
+             "contradiction_level": number,
+             "suspicious_signal": boolean
+          }
+       },
+       "verdict": "Verified"|"False Positive",
+       "reasoning": "string"
+    }
+    
+    Ensure sub-scores match telemetry matches. E.g. contradiction_level should be high (> 0.5) if vitals contradict the report.`;
 
     let result;
     try {
         const response = await proModel.invoke([
             ["system", systemPrompt],
-            ["user", "Analyze the data and provide a verification verdict."]
+            ["user", `Analyze telemetry for ${landmark} and verify the reported crisis.`]
         ]);
         result = safeParseJson(response.content, defaultFallback);
     } catch (e) {
@@ -96,32 +176,38 @@ export const truthEngine = async (state) => {
         result = defaultFallback;
     }
 
+    // Deep merge credibility default fallback if LLM omitted sub-scores
+    if (!result.classification) result.classification = {};
+    if (!result.classification.credibility) {
+        result.classification.credibility = defaultFallback.classification.credibility;
+    }
+
     const confidenceLevel = result.classification?.confidence_level ?? calculatedConfidence;
 
     console.log(`[Agent: The Truth-Engine] Validation score: ${confidenceLevel} - Verdict: ${result.verdict || "Verified"}`);
-    console.log(`[Agent: The Truth-Engine] Reasoning: ${result.reasoning || "Fallback heuristics applied."}`);
+    console.log(`[Agent: The Truth-Engine] Credibility Breakdown: ${JSON.stringify(result.classification.credibility)}`);
 
     const log = {
         timestamp: new Date().toISOString(),
         agent: "The Truth-Engine",
-        message: `Verified against ${vitals.location || landmark} telemetry. Confidence: ${confidenceLevel}.`,
+        message: `Verified against ${vitals.location || landmark} telemetry. Confidence: ${confidenceLevel}. Suspicious: ${result.classification.credibility.suspicious_signal}.`,
         outcome: result.verdict || "Verified",
         details: {
             verdict: result.verdict || "Verified",
             confidence_level: confidenceLevel,
-            twitter_posts: twitterPosts
+            twitter_posts: twitterPosts,
+            credibility: result.classification.credibility
         }
     };
 
-    // Only return the fields this agent owns — do NOT return a full classification
-    // that could overwrite the location object set by Sentinel.
     return {
         metadata: { source_reliability: confidenceLevel },
         classification: {
             confidence_level: confidenceLevel,
             verification_sources: result.classification?.verification_sources ?? [],
             verdict: result.verdict || "Verified",
-            twitter_posts: twitterPosts
+            twitter_posts: twitterPosts,
+            credibility: result.classification.credibility
         },
         traceLogs: [log]
     };

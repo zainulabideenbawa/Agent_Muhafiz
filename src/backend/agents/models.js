@@ -4,6 +4,8 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 
+import { updateApiHealth } from '../health_monitor.js';
+
 dotenv.config();
 
 const saPath = path.resolve("./xenon-lyceum-495513-e6-708a9ff3fc14.json");
@@ -29,6 +31,7 @@ const PRO_MODELS = [
 
 // Dual-Engine model invoker: tries Vertex AI (Service Account) first, falls back to AI Studio (API Key)
 async function invokeDualEngine(models, messages, options = {}) {
+    const start = Date.now();
     let lastError = null;
 
     // 1. Try Vertex AI (Service Account) if key file exists
@@ -44,6 +47,7 @@ async function invokeDualEngine(models, messages, options = {}) {
                 });
                 const result = await client.invoke(messages, options);
                 console.log(`[Models/Vertex] Success using Service Account model: "${model}"`);
+                updateApiHealth('llm_gateway', true, Date.now() - start);
                 return result;
             } catch (e) {
                 console.warn(`[Models/Vertex] Service Account failed for "${model}": ${e.message}`);
@@ -56,6 +60,7 @@ async function invokeDualEngine(models, messages, options = {}) {
     const apiKey = process.env.GOOGLE_API_KEY;
     if (!apiKey) {
         console.error("[Models/AIStudio] Fallback failed: GOOGLE_API_KEY is not defined.");
+        updateApiHealth('llm_gateway', false, Date.now() - start);
         throw lastError || new Error("No credentials available");
     }
 
@@ -70,6 +75,7 @@ async function invokeDualEngine(models, messages, options = {}) {
             });
             const result = await client.invoke(messages, options);
             console.log(`[Models/AIStudio] Success using API Key model: "${model}"`);
+            updateApiHealth('llm_gateway', true, Date.now() - start);
             return result;
         } catch (e) {
             console.warn(`[Models/AIStudio] API Key failed for "${model}": ${e.message}`);
@@ -77,6 +83,7 @@ async function invokeDualEngine(models, messages, options = {}) {
         }
     }
 
+    updateApiHealth('llm_gateway', false, Date.now() - start);
     throw lastError || new Error("All models in both Vertex and AI Studio failed");
 }
 

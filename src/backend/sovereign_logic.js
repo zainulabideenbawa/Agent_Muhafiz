@@ -1,6 +1,6 @@
 import { muhafizGraph } from './agents/index.js';
 import { broadcast } from './websocket.js';
-import { updateIncidentState, insertTask } from './db/index.js';
+import { updateIncidentState, insertTask, getIncidentById } from './db/index.js';
 
 export let activeUserDirective = null;
 
@@ -30,11 +30,23 @@ const _runPipeline = async (incidentId, input) => {
     console.log(`[Autonomous Logic] Initiating Agents for ${incidentId}`);
 
     try {
+        const existingIncident = await getIncidentById(incidentId);
+        const existingData = existingIncident?.data || {};
+
         const initialState = {
-            signal: { raw_input: input || "NIPA doob gaya" },
+            signal: { 
+                raw_input: input || existingIncident?.description || "NIPA doob gaya",
+                ...(existingData.signal || {})
+            },
             user_directive: activeUserDirective,
-            metadata: { incidentId },
-            traceLogs: []
+            metadata: { 
+                incidentId,
+                ...(existingData.metadata || {})
+            },
+            classification: existingData.classification || {},
+            assigned_department: existingData.assigned_department || null,
+            officer_status: existingIncident?.status || null,
+            traceLogs: existingData.traceLogs || []
         };
 
         const stream = await muhafizGraph.stream(initialState);

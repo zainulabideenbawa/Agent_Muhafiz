@@ -170,6 +170,7 @@ function App() {
     const websocket = new WebSocket('ws://127.0.0.1:3001');
     websocket.onmessage = (event) => {
       const data = JSON.parse(event.data);
+      window.dispatchEvent(new CustomEvent('sovereign_websocket_message', { detail: data }));
       if (data.type === 'TRACE_LOG') {
         console.log(`[Tactical] Incoming Log: ${data.log.agent} for ${data.assigned_department}`);
 
@@ -293,6 +294,7 @@ function App() {
         // Surface the HITL verification modal
         setLatestAlert({
           scope: 'QUEST',
+          incidentId: data.incidentId,
           radius_km: 0,
           push_notification: {
             en: `⚠️ VERIFICATION QUEST: ${data.data?.type?.toUpperCase() || 'CRISIS'} at ${data.data?.location || 'Karachi'}`,
@@ -384,6 +386,7 @@ function App() {
             setSidebarOpen={setSidebarOpen}
             selectedIncident={selectedIncident}
             setSelectedIncident={setSelectedIncident}
+            incidents={filteredIncidents}
           />
         </div>
 
@@ -409,7 +412,7 @@ function App() {
               />
 
               {/* Tactical Overlays (Map Space Only) */}
-              <div className="absolute top-6 left-6 z-20">
+              <div className="absolute bottom-6 left-6 z-20">
                 <TacticalLegend />
               </div>
 

@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, Truck, Users, LayoutDashboard, Settings, User, Save, Plus, MapPin, Trash2, Terminal, Send, TrendingUp, Megaphone, ClipboardList, Cpu, Search, ChevronRight, LogOut } from 'lucide-react';
 
-const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, setDashboardView, user, sidebarOpen, setSidebarOpen, selectedIncident, setSelectedIncident, onLogout }) => {
+const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, setDashboardView, user, sidebarOpen, setSidebarOpen, selectedIncident, setSelectedIncident, onLogout, incidents, triggerSimulation }) => {
     const [hubs, setHubs] = useState([]);
     const [isSaving, setIsSaving] = useState(false);
+    const [health, setHealth] = useState(null);
 
     const handleAuditorAction = async (actionType) => {
         if (!selectedIncident) return;
@@ -14,6 +15,9 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
             if (actionType === 'CONFIRM') {
                 endpoint = 'http://127.0.0.1:3001/api/incidents/confirm-crisis';
                 body = { incidentId: selectedIncident.id, note: 'Crisis officially confirmed by Sovereign Command.' };
+            } else if (actionType === 'ACCEPT_QUEST') {
+                endpoint = 'http://127.0.0.1:3001/api/incidents/accept-quest';
+                body = { incidentId: selectedIncident.id };
             } else {
                 endpoint = 'http://127.0.0.1:3001/api/incidents/retract-alert';
                 body = { incidentId: selectedIncident.id, reason: actionType === 'FALSE_ALARM' ? 'False Alarm' : 'Road Clear' };
@@ -28,7 +32,7 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
             if (data.success) {
                 setSelectedIncident(prev => ({
                     ...prev,
-                    status: actionType === 'CONFIRM' ? 'CONFIRMED' : 'RETRACTED',
+                    status: actionType === 'CONFIRM' ? 'CONFIRMED' : (actionType === 'ACCEPT_QUEST' ? 'INVESTIGATING' : 'RETRACTED'),
                     data: {
                         ...prev.data,
                         retraction_reason: actionType === 'FALSE_ALARM' ? 'False Alarm' : (actionType === 'ROAD_CLEAR' ? 'Road Clear' : prev.data?.retraction_reason),
@@ -54,6 +58,34 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
 
     useEffect(() => {
         fetchHubs();
+    }, [activeDept]);
+
+    useEffect(() => {
+        const fetchHealth = async () => {
+            try {
+                const res = await fetch('http://127.0.0.1:3001/api/health');
+                const data = await res.json();
+                setHealth(data);
+            } catch (e) { console.error("Health fetch failed", e); }
+        };
+        fetchHealth();
+        const interval = setInterval(fetchHealth, 3000);
+
+        const handleWsMessage = (e) => {
+            const data = e.detail;
+            if (data.type === 'RESOURCES_UPDATED' && data.deptId === activeDept) {
+                setHubs(data.hubs);
+            }
+            if (data.type === 'HEALTH_UPDATE') {
+                setHealth(data.health);
+            }
+        };
+        window.addEventListener('sovereign_websocket_message', handleWsMessage);
+
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener('sovereign_websocket_message', handleWsMessage);
+        };
     }, [activeDept]);
 
     const fetchHubs = async () => {
@@ -254,13 +286,56 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
         <div className="w-full h-full bg-black/10 backdrop-blur-3xl border-r border-white/5 flex flex-col shadow-2xl relative overflow-hidden z-50 transition-all duration-500">
             {/* Header / Dept Selector */}
             <div className="p-6 border-b border-white/5 bg-white/[0.01]">
-                <div className="flex items-center gap-3 mb-6 p-3 rounded-xl bg-zinc-900/50 border border-zinc-800">
+                <div className="flex items-center gap-3 mb-4 p-3 rounded-xl bg-zinc-900/50 border border-zinc-800">
                     <div className={`p-2 rounded-lg ${currentDept.bg} ${currentDept.color}`}>
                         <Shield size={20} />
                     </div>
                     <div className="min-w-0">
                         <h4 className="text-[10px] font-black uppercase tracking-widest text-zinc-500 truncate">Sovereign Unit</h4>
                         <p className={`text-xs font-bold truncate ${currentDept.color}`}>{currentDept.name}</p>
+                    </div>
+                </div>
+
+                {/* Sovereign API Health Panel */}
+                <div className="mb-4 p-3 bg-zinc-950/40 border border-white/5 rounded-2xl space-y-2">
+                    <div className="flex justify-between items-center">
+                        <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">Sovereign API Grid</span>
+                        {Object.values(health || {}).some(h => h.status === 'DEGRADED') ? (
+                            <span className="flex items-center gap-1 text-[7px] font-black text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded animate-pulse">
+                                ⚠️ DEGRADED MODE
+                            </span>
+                        ) : (
+                            <span className="flex items-center gap-1 text-[7px] font-black text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                                ● NOMINAL
+                            </span>
+                        )}
+                    </div>
+                    <div className="grid grid-cols-5 gap-1 text-[6px] text-center font-mono">
+                        {Object.entries(health || {
+                            TomTom: { status: 'ONLINE', latency: 0 },
+                            Overpass: { status: 'ONLINE', latency: 0 },
+                            OpenMeteo: { status: 'ONLINE', latency: 0 },
+                            NASA_FIRMS: { status: 'ONLINE', latency: 0 },
+                            Gemini: { status: 'ONLINE', latency: 0 }
+                        }).map(([api, info]) => {
+                            const isDegraded = info.status === 'DEGRADED';
+                            return (
+                                <div 
+                                    key={api} 
+                                    className={`p-1 rounded border ${
+                                        isDegraded 
+                                            ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' 
+                                            : 'bg-zinc-900/50 border-zinc-800/80 text-zinc-400'
+                                    }`}
+                                    title={`${api}: ${info.status} (${info.latency}ms)`}
+                                >
+                                    <div className="font-bold truncate text-[5px]">{api.replace('_', ' ')}</div>
+                                    <div className={`mt-0.5 font-bold ${isDegraded ? 'text-amber-500 animate-pulse' : 'text-emerald-500'}`}>
+                                        {info.latency}ms
+                                    </div>
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
 
@@ -353,11 +428,14 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
                                             <span className="text-[10px] font-mono font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">
                                                 {selectedIncident.id}
                                             </span>
-                                            <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full border ${selectedIncident.status === 'RESOLVED' || selectedIncident.status === 'CONFIRMED'
+                                            <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full border ${
+                                                selectedIncident.status === 'RESOLVED' || selectedIncident.status === 'CONFIRMED'
                                                     ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
                                                     : selectedIncident.status === 'RETRACTED'
                                                         ? 'bg-zinc-800 border-zinc-700 text-zinc-400'
-                                                        : 'bg-red-500/10 border-red-500/20 text-red-400 animate-pulse'
+                                                        : selectedIncident.status === 'QUEST_ACTIVE' || selectedIncident.status === 'INVESTIGATING'
+                                                            ? 'bg-blue-500/10 border-blue-500/20 text-blue-400 animate-pulse'
+                                                            : 'bg-red-500/10 border-red-500/20 text-red-400 animate-pulse'
                                                 }`}>
                                                 {selectedIncident.status || 'ACTIVE'}
                                             </span>
@@ -417,10 +495,82 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
                                         </p>
                                     </div>
 
+                                    {selectedIncident.data?.classification?.credibility && (
+                                        <div className="p-3 bg-zinc-900/40 border border-white/5 rounded-2xl space-y-2">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest">Sovereign Truth Audit</span>
+                                                <span className={`text-[9px] font-mono font-black ${
+                                                    selectedIncident.data.classification.credibility.composite_credibility_score >= 0.8
+                                                        ? 'text-emerald-400'
+                                                        : selectedIncident.data.classification.credibility.composite_credibility_score >= 0.6
+                                                            ? 'text-amber-400'
+                                                            : 'text-red-400'
+                                                }`}>
+                                                    {(selectedIncident.data.classification.credibility.composite_credibility_score * 100).toFixed(0)}% CONFIDENCE
+                                                </span>
+                                            </div>
+                                            
+                                            {/* Verification Rationale */}
+                                            <p className="text-[9px] text-zinc-400 italic leading-relaxed">
+                                                "{selectedIncident.data.classification.credibility.verification_rationale}"
+                                            </p>
+
+                                            {/* Breakdown bars */}
+                                            <div className="space-y-1.5 pt-1.5 border-t border-white/5">
+                                                <CredibilityBar 
+                                                    label="Source Veracity" 
+                                                    val={selectedIncident.data.classification.credibility.source_credibility_score} 
+                                                />
+                                                <CredibilityBar 
+                                                    label="Sensor Urgency Match" 
+                                                    val={selectedIncident.data.classification.credibility.urgency_validation} 
+                                                />
+                                                <CredibilityBar 
+                                                    label="Signal Velocity" 
+                                                    val={selectedIncident.data.classification.credibility.velocity_score} 
+                                                />
+                                                <div className="flex justify-between items-center text-[7px] font-bold">
+                                                    <span className="text-zinc-500 uppercase">OSM Geolocation:</span>
+                                                    <span className={selectedIncident.data.classification.credibility.geolocation_match ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}>
+                                                        {selectedIncident.data.classification.credibility.geolocation_match ? 'MATCHED' : 'UNVERIFIED'}
+                                                    </span>
+                                                </div>
+                                                <div className="flex justify-between items-center text-[7px] font-bold">
+                                                    <span className="text-zinc-500 uppercase">Contradiction Index:</span>
+                                                    <span className={selectedIncident.data.classification.credibility.contradiction_index >= 0.5 ? 'text-red-400 font-bold' : 'text-emerald-400 font-bold'}>
+                                                        {(selectedIncident.data.classification.credibility.contradiction_index * 100).toFixed(0)}%
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {selectedIncident.data?.action_plan?.tactical_directive && (
+                                        <div className="p-3 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl space-y-1">
+                                            <span className="text-[7px] text-emerald-400 uppercase font-black block mb-1">Tactical Directives</span>
+                                            <p className="text-zinc-300 font-mono text-[9px] leading-relaxed">
+                                                &gt; {selectedIncident.data.action_plan.tactical_directive}
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {selectedIncident.data?.action_plan?.deployment?.units && (
+                                        <div className="p-3 bg-white/[0.02] border border-white/5 rounded-2xl space-y-1">
+                                            <span className="text-[7px] text-zinc-500 uppercase font-black block mb-1">Allocated Equipment & Units</span>
+                                            <div className="flex flex-wrap gap-1.5 mt-1">
+                                                {selectedIncident.data.action_plan.deployment.units.map((unit, i) => (
+                                                    <span key={i} className="text-[8px] font-mono text-zinc-300 bg-white/5 border border-white/10 px-2 py-0.5 rounded">
+                                                        {unit}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
                                     <div className="grid grid-cols-2 gap-2">
                                         <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-2.5 space-y-0.5">
                                             <span className="text-[7px] text-zinc-500 uppercase font-black block">Triage Priority</span>
-                                            <span className="text-red-400 font-mono font-black">Level 8</span>
+                                            <span className="text-red-400 font-mono font-black">Level {selectedIncident.data?.classification?.urgency || selectedIncident.urgency || 8}</span>
                                         </div>
                                         <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-2.5 space-y-0.5">
                                             <span className="text-[7px] text-zinc-500 uppercase font-black block">Assigned Support</span>
@@ -431,6 +581,16 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
 
                                 <div className="space-y-2 border-t border-white/5 pt-3">
                                     <span className="text-[8px] font-black text-zinc-500 uppercase tracking-widest block ml-1">Auditor Agent Controls</span>
+
+                                    {selectedIncident.status === 'QUEST_ACTIVE' && (
+                                        <button
+                                            disabled={isSaving}
+                                            onClick={() => handleAuditorAction('ACCEPT_QUEST')}
+                                            className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[9px] font-black uppercase tracking-[0.1em] transition-all shadow-lg shadow-blue-950/30 flex items-center justify-center gap-1.5 mb-2"
+                                        >
+                                            <Shield size={10} /> Accept Quest & Go En Route
+                                        </button>
+                                    )}
 
                                     <div className="flex gap-2">
                                         <button
@@ -460,6 +620,113 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
                             </div>
                         ) : (
                             <>
+                                <div className="space-y-4 mb-4">
+                                    <div className="flex justify-between items-center px-2">
+                                        <h5 className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-600">Active Incidents</h5>
+                                        <span className="text-[10px] font-mono text-red-500">{(incidents || []).length} Alerts</span>
+                                    </div>
+                                    <div className="space-y-2 max-h-[260px] overflow-y-auto custom-scrollbar pr-1">
+                                        {(incidents || []).length === 0 ? (
+                                            <div className="p-4 bg-zinc-900/10 border border-zinc-800/40 rounded-2xl text-center text-zinc-600 text-[10px] italic">
+                                                No active incidents. grid is green.
+                                            </div>
+                                        ) : (
+                                            (incidents || []).map((inc) => (
+                                                <div 
+                                                    key={inc.id} 
+                                                    onClick={() => setSelectedIncident(inc)}
+                                                    className="p-3 bg-zinc-900/30 border border-zinc-800/50 rounded-2xl hover:border-white/10 hover:bg-white/[0.02] cursor-pointer transition-all flex items-center justify-between group"
+                                                >
+                                                    <div className="min-w-0 space-y-1">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="text-[8px] font-mono font-black text-emerald-400">
+                                                                {inc.id}
+                                                            </span>
+                                                            <span className={`text-[7px] font-black uppercase px-1.5 py-0.5 rounded-full border ${
+                                                                inc.status === 'RESOLVED' || inc.status === 'CONFIRMED'
+                                                                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                                                                    : inc.status === 'RETRACTED'
+                                                                        ? 'bg-zinc-800 border-zinc-700 text-zinc-400'
+                                                                        : inc.status === 'QUEST_ACTIVE' || inc.status === 'INVESTIGATING'
+                                                                            ? 'bg-blue-500/10 border-blue-500/20 text-blue-400'
+                                                                            : 'bg-red-500/10 border-red-500/20 text-red-400'
+                                                            }`}>
+                                                                {inc.status || 'ACTIVE'}
+                                                            </span>
+                                                        </div>
+                                                        <h6 className="text-[10px] font-bold text-zinc-300 truncate">
+                                                            {inc.location?.landmark || inc.location || 'Karachi Sector'}
+                                                        </h6>
+                                                    </div>
+                                                    <ChevronRight size={12} className="text-zinc-600 group-hover:text-white transition-all transform group-hover:translate-x-0.5" />
+                                                </div>
+                                            ))
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4 mb-4 pt-4 border-t border-white/5">
+                                    <div className="flex justify-between items-center px-2">
+                                        <h5 className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-600">Command Simulator</h5>
+                                        <span className="text-[8px] font-mono text-blue-500 animate-pulse">GRID_LINK_READY</span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button
+                                            onClick={() => triggerSimulation('flood')}
+                                            className="py-2 bg-blue-500/10 border border-blue-500/20 hover:bg-blue-500/20 text-blue-400 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all"
+                                        >
+                                            Inject Flood
+                                        </button>
+                                        <button
+                                            onClick={() => triggerSimulation('fire')}
+                                            className="py-2 bg-orange-500/10 border border-orange-500/20 hover:bg-orange-500/20 text-orange-400 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all"
+                                        >
+                                            Inject Fire
+                                        </button>
+                                    </div>
+                                    <button
+                                        onClick={async () => {
+                                            triggerSimulation(null, "Severe urban flooding reported at Clifton Block 5 near Underpass!");
+                                            setTimeout(() => {
+                                                triggerSimulation(null, "Massive commercial fire breaking out at Saddar Cooperative Market!");
+                                            }, 1500);
+                                        }}
+                                        className="w-full py-2 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 text-red-400 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5"
+                                    >
+                                        💥 Run Dual-Crisis Stress Test
+                                    </button>
+                                    <div className="flex gap-2">
+                                        <input
+                                            id="custom_signal_input"
+                                            type="text"
+                                            placeholder="Custom signal text..."
+                                            className="flex-1 bg-zinc-900/50 border border-white/10 rounded-xl px-3 py-2 text-[10px] text-zinc-300 font-mono outline-none focus:border-emerald-500/50 transition-all"
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    const val = e.currentTarget.value;
+                                                    if (val) {
+                                                        triggerSimulation(null, val);
+                                                        e.currentTarget.value = '';
+                                                    }
+                                                }
+                                            }}
+                                        />
+                                        <button
+                                            onClick={() => {
+                                                const el = document.getElementById('custom_signal_input');
+                                                const val = el ? el.value : '';
+                                                if (val) {
+                                                    triggerSimulation(null, val);
+                                                    el.value = '';
+                                                }
+                                            }}
+                                            className="px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[9px] font-black uppercase tracking-wider transition-all"
+                                        >
+                                            Inject
+                                        </button>
+                                    </div>
+                                </div>
+
                                 <div className="flex justify-between items-center px-2">
                                     <h5 className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-600">Active Stations</h5>
                                     <span className="text-[10px] font-mono text-emerald-500">{hubs.length} Hubs</span>
@@ -638,6 +905,23 @@ const EditField = ({ label, value, onChange, type = "text" }) => (
             onChange={(e) => onChange(e.target.value)}
             className="w-full bg-black/50 border border-zinc-800 rounded px-2 py-1.5 text-[10px] text-zinc-300 focus:border-blue-500 outline-none"
         />
+    </div>
+);
+
+const CredibilityBar = ({ label, val }) => (
+    <div className="space-y-0.5">
+        <div className="flex justify-between text-[7px] font-bold text-zinc-500">
+            <span className="uppercase">{label}</span>
+            <span>{(val * 100).toFixed(0)}%</span>
+        </div>
+        <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+            <div 
+                className={`h-full transition-all duration-500 ${
+                    val >= 0.8 ? 'bg-emerald-500' : val >= 0.6 ? 'bg-amber-500' : 'bg-red-500'
+                }`}
+                style={{ width: `${val * 100}%` }}
+            />
+        </div>
     </div>
 );
 

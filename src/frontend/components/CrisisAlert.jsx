@@ -3,7 +3,29 @@ import { AlertCircle, X, Shield, Globe, Copy, Check, Terminal, Cpu, Users, Eye, 
 
 const CrisisAlert = ({ message, onClose }) => {
     const [copied, setCopied] = React.useState(false);
+    const [isSyncing, setIsSyncing] = React.useState(false);
+
     if (!message) return null;
+
+    const handleAcknowledgeAndSync = async () => {
+        if (!message.incidentId) {
+            onClose();
+            return;
+        }
+        setIsSyncing(true);
+        try {
+            await fetch('http://127.0.0.1:3001/api/incidents/accept-quest', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ incidentId: message.incidentId })
+            });
+        } catch (e) {
+            console.error("Sync quest failed:", e);
+        } finally {
+            setIsSyncing(false);
+            onClose();
+        }
+    };
 
     const copyDraft = () => {
         const fullText = `${message.whatsapp_draft?.en || ''}\n\n${message.whatsapp_draft?.ur || ''}`;
@@ -173,11 +195,12 @@ const CrisisAlert = ({ message, onClose }) => {
                             {copied ? "Copied" : "Copy WhatsApp Draft"}
                         </button>
                         <button 
-                            onClick={onClose}
-                            className="flex-1 py-4 bg-amber-500 hover:bg-amber-400 text-black font-black uppercase tracking-widest text-[9px] rounded-2xl shadow-[0_0_35px_rgba(245,158,11,0.2)] hover:shadow-[0_0_45px_rgba(245,158,11,0.3)] transition-all flex items-center justify-center gap-2 border border-amber-600/30"
+                            disabled={isSyncing}
+                            onClick={handleAcknowledgeAndSync}
+                            className="flex-1 py-4 bg-amber-500 hover:bg-amber-400 text-black font-black uppercase tracking-widest text-[9px] rounded-2xl shadow-[0_0_35px_rgba(245,158,11,0.2)] hover:shadow-[0_0_45px_rgba(245,158,11,0.3)] transition-all flex items-center justify-center gap-2 border border-amber-600/30 disabled:opacity-50"
                         >
                             <Shield size={12} className="text-black" />
-                            Acknowledge & Sync Quest
+                            {isSyncing ? "Syncing..." : "Acknowledge & Sync Quest"}
                         </button>
                     </div>
                 </div>

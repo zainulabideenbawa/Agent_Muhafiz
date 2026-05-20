@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { db } from './connection.js';
 import { department_hubs } from './schema.js';
+import { broadcast } from '../websocket.js';
 
 let departmentResources = {
     'KMC_HEALTH': [
@@ -40,6 +41,8 @@ export const updateDepartmentResources = async (deptId, hubs) => {
         } catch (e) { console.error("DB Save Failed:", e); }
     }
     departmentResources[deptId] = hubs;
+    // Broadcast resource update to all connected clients
+    broadcast({ type: 'RESOURCES_UPDATED', deptId, hubs });
     return true;
 };
 
