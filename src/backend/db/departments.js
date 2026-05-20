@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { db } from './connection.js';
 import { department_hubs } from './schema.js';
+import { broadcast } from '../websocket.js';
 
 let departmentResources = {
     'KMC_HEALTH': [
@@ -17,6 +18,10 @@ let departmentResources = {
     ],
     'RESCUE_1122': [
         { id: 'R11-CLI', name: 'Clifton HQ', location: 'Clifton', trucks: 3, ambulances: 15, officers: 30 }
+    ],
+    'KWSC_FWO': [
+        { id: 'KWSC-GUL', name: 'KWSC Gulshan Depot', location: 'Gulshan', trucks: 4, ambulances: 0, officers: 12 },
+        { id: 'FWO-CEN', name: 'FWO Central HQ', location: 'Saddar', trucks: 5, ambulances: 0, officers: 20 }
     ]
 };
 
@@ -40,6 +45,8 @@ export const updateDepartmentResources = async (deptId, hubs) => {
         } catch (e) { console.error("DB Save Failed:", e); }
     }
     departmentResources[deptId] = hubs;
+    // Broadcast resource update to all connected clients
+    broadcast({ type: 'RESOURCES_UPDATED', deptId, hubs });
     return true;
 };
 

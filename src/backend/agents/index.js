@@ -19,6 +19,8 @@ const crisisStateSchema = {
     communication: { value: (prev, curr) => ({ ...prev, ...curr }), default: () => ({}) },
     audit_trail: { value: (prev, curr) => ({ ...prev, ...curr }), default: () => ({}) },
     assigned_department: { value: (prev, curr) => curr || prev, default: () => null },
+    officer_status: { value: (prev, curr) => curr || prev, default: () => null },
+    coordinated_sla: { value: (prev, curr) => ({ ...prev, ...curr }), default: () => ({}) },
     traceLogs: { value: (prev, curr) => prev.concat(curr), default: () => [] }
 };
 

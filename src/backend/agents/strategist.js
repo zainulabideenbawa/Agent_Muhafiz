@@ -62,17 +62,102 @@ const TACTICAL_TEMPLATES = {
         `4. MEDICAL STANDBY: ${nearestHospital} on standby for potential injuries. Edhi ambulance pre-positioned at perimeter.\n` +
         `5. AMBULANCE CORRIDOR: Maintain ONE dedicated emergency vehicle corridor at all times via ${routePrimary}.\n` +
         `6. ETA: ${eta} minutes to scene from ${hub}.`,
+
+    proactive_maintenance: (landmark, hub, eta, routePrimary, routeAvoid, policeBlock, nearestHospital) =>
+        `PROACTIVE INFRASTRUCTURE MAINTENANCE DIRECTIVE — ${landmark}\n` +
+        `1. ROUTE: Deploy suction trucks immediately from ${hub} via ${routePrimary}. Keep clear of ${routeAvoid}.\n` +
+        `2. TACTICAL DEPLOYMENT: Position KWSC/FWO suction trucks at designated catch-basins and main sewage junctions along the BRT Red Line corridor.\n` +
+        `3. DRAINAGE CLEARANCE: Extract sludge and clear solid blockages in the main line. Verify that capacity_used falls below 50%.\n` +
+        `4. POLICE COORDINATION: Request Traffic Police at ${policeBlock} to clear work zones and manage traffic diversions around active trucks.\n` +
+        `5. SECURE REPORT: Submit ground-truth confirmation once catch-basins are fully cleared. Silent operation: do not alert local news/social feeds.\n` +
+        `6. ETA: ${eta} minutes from ${hub}.`,
 };
 
-const getClosestHub = (dept, incidentLat, incidentLng) => {
-    const hubs = KARACHI_HUBS[dept] || KARACHI_HUBS.RESCUE_1122;
-    let closest = hubs[0];
-    let minDist = Infinity;
-    for (const hub of hubs) {
-        const dist = Math.sqrt(Math.pow(hub.lat - incidentLat, 2) + Math.pow(hub.lng - incidentLng, 2));
-        if (dist < minDist) { minDist = dist; closest = hub; }
+import { getDepartmentResources, updateDepartmentResources, getAllIncidents } from '../db/index.js';
+
+// Karachi coordinate lookup for database hubs
+const HUB_COORDINATES = {
+    'Gulshan': { lat: 24.9215, lng: 67.0900 },
+    'Saddar': { lat: 24.8739, lng: 67.0250 },
+    'Defence': { lat: 24.8250, lng: 67.0700 },
+    'Nazimabad': { lat: 24.9200, lng: 67.0300 },
+    'Landhi': { lat: 24.8500, lng: 67.1400 },
+    'Clifton': { lat: 24.8200, lng: 67.0300 }
+};
+
+const selectHubWithResources = async (dept, incidentLat, incidentLng, crisisType) => {
+    // 1. Fetch live hubs from DB
+    const hubs = await getDepartmentResources(dept);
+    
+    // Sort by distance (closest first)
+    const hubsWithDist = hubs.map(h => {
+        const coords = HUB_COORDINATES[h.location] || { lat: 24.8607, lng: 67.0011 };
+        const dist = Math.sqrt(Math.pow(coords.lat - incidentLat, 2) + Math.pow(coords.lng - incidentLng, 2));
+        return { ...h, lat: coords.lat, lng: coords.lng, distance: dist };
+    });
+    
+    if (hubsWithDist.length === 0) {
+        // Ultimate fallback
+        return {
+            selectedHub: { id: 'FB-CEN', name: 'Central Fire Station', location: 'Saddar', lat: 24.8739, lng: 67.0250, trucks: 5, ambulances: 2, officers: 20 },
+            warning: null,
+            allHubs: [],
+            requirements: { trucks: 0, ambulances: 0, officers: 0 }
+        };
     }
-    return closest;
+
+    hubsWithDist.sort((a, b) => a.distance - b.distance);
+
+    // 2. Determine resource requirements based on crisis type
+    const type = (crisisType || "").toLowerCase();
+    const reqTrucks = (type === 'fire' || type === 'flood' || type === 'proactive_maintenance') ? 1 : 0;
+    const reqAmbulances = (type === 'blast' || type === 'protest' || type === 'flood') ? 1 : 0;
+    const reqOfficers = (type === 'fire' || type === 'proactive_maintenance') ? 5 : (type === 'blast' || type === 'protest') ? 5 : 3;
+
+    // 3. Try closest hub first
+    const primaryHub = hubsWithDist[0];
+    const hasEnough = (primaryHub.trucks >= reqTrucks) && 
+                      (primaryHub.ambulances >= reqAmbulances) && 
+                      (primaryHub.officers >= reqOfficers);
+
+    if (hasEnough) {
+        return {
+            selectedHub: primaryHub,
+            warning: null,
+            allHubs: hubsWithDist,
+            requirements: { trucks: reqTrucks, ambulances: reqAmbulances, officers: reqOfficers }
+        };
+    }
+
+    // Proximity fallback: find first hub that satisfies requirements
+    for (let i = 1; i < hubsWithDist.length; i++) {
+        const backupHub = hubsWithDist[i];
+        const backupHasEnough = (backupHub.trucks >= reqTrucks) && 
+                                (backupHub.ambulances >= reqAmbulances) && 
+                                (backupHub.officers >= reqOfficers);
+        if (backupHasEnough) {
+            const warning = `⚠️ RESOURCE DEPLETION ALERT: Nearest station (${primaryHub.name}) has exhausted its fleet. Rerouting dispatch to secondary station (${backupHub.name}) at ${backupHub.location}.`;
+            return {
+                selectedHub: backupHub,
+                warning,
+                allHubs: hubsWithDist,
+                requirements: { trucks: reqTrucks, ambulances: reqAmbulances, officers: reqOfficers }
+            };
+        }
+    }
+
+    // All hubs exhausted - dispatch closest anyway with critical warning
+    const warning = `🚨 CRITICAL DEPLETION: All hubs for ${dept} are at maximum capacity! Dispatching emergency backup units from closest station (${primaryHub.name}) under degraded availability.`;
+    return {
+        selectedHub: primaryHub,
+        warning,
+        allHubs: hubsWithDist,
+        requirements: {
+            trucks: Math.min(primaryHub.trucks, reqTrucks),
+            ambulances: Math.min(primaryHub.ambulances, reqAmbulances),
+            officers: Math.min(primaryHub.officers, reqOfficers)
+        }
+    };
 };
 
 export const strategist = async (state) => {
@@ -91,16 +176,18 @@ export const strategist = async (state) => {
         ? nearbyInfra.results[0].name
         : null;
 
-    // Identify closest hub and get real TomTom ETA
-    const closestHub = getClosestHub(dept, lat, lng);
-    const routeEta = await get_route_eta(closestHub.lat, closestHub.lng, lat, lng);
+    // Identify closest hub under live resource constraints
+    const { selectedHub, warning, allHubs, requirements } = await selectHubWithResources(dept, lat, lng, crisisType);
+
+    // Get real TomTom ETA from the selected hub to incident coords
+    const routeEta = await get_route_eta(selectedHub.lat, selectedHub.lng, lat, lng);
     const etaMins = routeEta.eta_mins;
     const etaLabel = routeEta.source !== 'Simulated'
         ? `${etaMins} min (TomTom live-traffic verified)`
         : `${etaMins} min (estimated)`;
 
-    console.log(`[Strategist] Closest hub: "${closestHub.name}" → ETA ${etaLabel}`);
-    if (nearestFacility) console.log(`[Strategist/Overpass] Nearest ${nearbyInfra.amenity}: "${nearestFacility}"`);
+    console.log(`[Strategist] Selected hub: "${selectedHub.name}" → ETA ${etaLabel}`);
+    if (warning) console.warn(`[Strategist] ${warning}`);
 
     // Get route intel from triage
     const routePrimary = triage.route_directive?.primary_route || zoneIntel.key_roads?.[0] || 'Shara-e-Faisal (M-9 Corridor)';
@@ -114,54 +201,142 @@ export const strategist = async (state) => {
         KMC_HEALTH: ['KMC Heavy Suction Pump (1,000 L/min)', 'Emergency Dewatering Excavator (JCB)', 'NDMA Relief Van (50 persons capacity)', 'KMC Drainage Crew (8 workers)'],
         RESCUE_1122: ['Rescue 1122 Rapid Response Van', 'Advanced Life Support Ambulance (ALS)', 'Edhi Ambulance Unit #3', 'Bomb Disposal Squad (CTD)', 'CCTV Surveillance Van'],
         POLICE_FORCE: ['Traffic Police Mobile Patrol Unit', 'DSP Riot Control Platoon (30 officers)', 'Police Negotiation Cell', 'Karachi Traffic Police Motorcycle Squad'],
+        KWSC_FWO: ['KWSC Gulshan Suction Truck (KWSC-GUL-T1)', 'FWO Central Sludge Clearance Unit (FWO-CEN-T1)', 'KWSC Heavy Duty Drainage Crew (6 officers)', 'FWO Special Operations Suction Fleet']
     };
     const selectedUnits = unitsByDept[dept] || unitsByDept.RESCUE_1122;
 
-    // Build tactical directive
+    // Select turn-by-turn or custom tactical directive
     const tacticalFn = TACTICAL_TEMPLATES[crisisType] || TACTICAL_TEMPLATES.flood;
-    const tacticalDirective = tacticalFn(landmark, closestHub.name, etaMins, routePrimary, routeAvoid, policeBlock, nearestHospital);
+    const tacticalDirective = tacticalFn(landmark, selectedHub.name, etaMins, routePrimary, routeAvoid, policeBlock, nearestHospital);
+
+    // Contention Engine Mathematical Modeling
+    const calculatePriorityScore = (severity, population, eta) => {
+        const severityPart = severity * 0.5;
+        const vulnDensity = Math.min(10, population / 10000);
+        const vulnPart = vulnDensity * 0.3;
+        const etaPart = Math.max(0, 60 - eta) * 0.2;
+        const score = severityPart + vulnPart + etaPart;
+        return {
+            score: parseFloat(score.toFixed(2)),
+            breakdown: `Severity: ${severity} * 0.5 = ${severityPart.toFixed(1)}, Vulnerability Density: ${vulnDensity.toFixed(2)} * 0.3 = ${vulnPart.toFixed(2)}, ETA: ${eta} mins -> (60 - ${eta}) * 0.2 = ${etaPart.toFixed(1)}`
+        };
+    };
+
+    const currentSeverity = state.classification?.urgency || triage.threat_level || 5;
+    const currentPopulation = state.impact_analysis?.affected_population || 30000;
+    const currentEta = etaMins || 15;
+    const currentPriority = calculatePriorityScore(currentSeverity, currentPopulation, currentEta);
+
+    // Retrieve active concurrent incidents from DB
+    let activeIncidents = [];
+    try {
+        const allDbIncidents = await getAllIncidents(20);
+        activeIncidents = allDbIncidents.filter(inc => 
+            ['PENDING', 'PROCESSING', 'QUEST_ACTIVE', 'INVESTIGATING', 'CONFIRMED'].includes(inc.status) &&
+            inc.incident_id !== state.incident_id && inc.incident_id !== state.metadata?.incidentId
+        );
+    } catch (e) {
+        console.warn('[Strategist] Failed to fetch active concurrent incidents:', e.message);
+    }
+
+    const rankedList = [
+        {
+            incident_id: state.metadata?.incidentId || state.incident_id || 'CURRENT',
+            type: crisisType,
+            location: landmark,
+            priority_score: currentPriority.score,
+            breakdown: currentPriority.breakdown,
+            status: 'ACTIVE_PLANNING'
+        }
+    ];
+
+    for (const inc of activeIncidents) {
+        const incType = inc.type || inc.data?.classification?.type || 'unknown';
+        const incLoc = inc.location || inc.data?.classification?.location?.landmark || 'Karachi';
+        const severity = inc.data?.classification?.urgency || inc.data?.triage?.threat_level || 5;
+        const population = inc.data?.impact_analysis?.affected_population || 30000;
+        const eta = inc.data?.action_plan?.deployment?.eta_mins || inc.data?.deployment?.eta_mins || 20;
+        
+        const priority = calculatePriorityScore(severity, population, eta);
+        rankedList.push({
+            incident_id: inc.incident_id,
+            type: incType,
+            location: incLoc,
+            priority_score: priority.score,
+            breakdown: priority.breakdown,
+            status: inc.status
+        });
+    }
+
+    // Sort ranked list descending by priority score
+    rankedList.sort((a, b) => b.priority_score - a.priority_score);
+
+    let contentionText = `[RESOURCE CONTENTION prioritization math]\n`;
+    contentionText += `Priority Score Formula: Severity * 0.5 + Math.min(10, Population / 10000) * 0.3 + (60 - ETA) * 0.2\n\n`;
+    contentionText += `Active Incident Rankings:\n`;
+    rankedList.forEach((r, idx) => {
+        contentionText += `${idx + 1}. [${r.incident_id}] ${r.type.toUpperCase()} at ${r.location} (Status: ${r.status}) -> Priority Score: ${r.priority_score}\n`;
+        contentionText += `   Breakdown: ${r.breakdown}\n`;
+    });
+
+    const currentRank = rankedList.findIndex(r => r.incident_id === (state.metadata?.incidentId || state.incident_id || 'CURRENT')) + 1;
+    const mathRationale = `Priority Score evaluated mathematically as: ${currentPriority.score}/10 based on formula [Severity(${currentSeverity})*0.5 + VulnDensity(${Math.min(10, currentPopulation / 10000).toFixed(2)})*0.3 + (60-ETA(${currentEta}))*0.2]. Currently ranked #${currentRank} of ${rankedList.length} active emergencies competing for resources.`;
 
     const heuristicPlan = {
         priority_level: (state.classification?.urgency || 0) >= 8 ? 'CRITICAL' : 'HIGH',
         deployment: {
-            hub: closestHub.name,
-            hub_address: closestHub.address,
+            hub: selectedHub.name,
+            hub_address: selectedHub.location,
             units: selectedUnits,
             eta_mins: etaMins,
             eta_label: etaLabel,
             distance_km: routeEta.distance_km,
             traffic_delay_mins: routeEta.delay_mins,
             route_source: routeEta.source,
+            resources_allocated: {
+                hubId: selectedHub.id,
+                dept: dept,
+                trucks: requirements.trucks,
+                ambulances: requirements.ambulances,
+                officers: requirements.officers
+            }
         },
         tactical_directive: tacticalDirective,
         inter_agency_coordination: triage.police_notification || `Notify ${policeBlock} for route clearance. Coordinate with ${nearestHospital} for casualty intake.`,
         nearest_facility: nearestFacility ? `${nearestFacility} (OpenStreetMap verified)` : nearestHospital,
-        reasoning: `Deployed from "${closestHub.name}" (${closestHub.address}) — closest ${dept.replace(/_/g, ' ')} hub to ${landmark}. ` +
+        reasoning: (warning ? `[RESOURCE TRADE-OFF] ${warning} ` : '') +
+            `${mathRationale}\n\n${contentionText}\n\n` +
+            `Deployed from "${selectedHub.name}" (${selectedHub.location}) — closest available ${dept.replace(/_/g, ' ')} hub to ${landmark}. ` +
             `Real-time TomTom routing via ${routePrimary}: ETA ${etaLabel}. ` +
             `Traffic diversion: avoid ${routeAvoid}. Police block required at: ${policeBlock}. ` +
-            `Nearest ${nearbyInfra.amenity || 'hospital'}: ${nearestHospital}. ` +
-            `${routeEta.delay_mins > 0 ? `Current traffic delay: ${routeEta.delay_mins} min — police route clearance critical.` : 'Route currently clear.'}`,
+            `Nearest ${nearbyInfra.amenity || 'hospital'}: ${nearestHospital}.`
     };
 
     const prompt = `You are the Sovereign Strategist for Karachi ${dept}.
     LOCATION: ${landmark}
     CRISIS TYPE: ${crisisType.toUpperCase()}
-    CLOSEST HUB: ${JSON.stringify(closestHub)}
+    SELECTED HUB: ${JSON.stringify(selectedHub)}
     TRIAGE ROUTE INTEL: ${JSON.stringify(triage.route_directive || {})}
     ZONE INTEL: ${JSON.stringify(zoneIntel)}
     REAL ETA (TomTom): ${etaLabel}
     NEAREST FACILITY (OpenStreetMap): ${nearestFacility || 'not found'}
+    WARNING: ${warning || 'none'}
+    CONCURRENT ACTIVE INCIDENTS: ${JSON.stringify(activeIncidents.map(i => ({ incident_id: i.incident_id, type: i.type, location: i.location })))}
     
     TASK — Be specific, use real addresses:
     1. Confirm the exact hub, list named units with capacities.
     2. Specify turn-by-turn route from hub to scene using real Karachi road names.
     3. State police clearance required at which exact intersection.
-    4. Write a tactical directive for field officers (numbered steps).
-    5. State inter-agency coordination needed.
+    4. Write a tactical directive for field officers (numbered steps). For "proactive_maintenance", write preventative catch-basin sludge suction steps.
+    5. Perform mathematical resource contention scoring using the formula:
+       Priority Score = Severity * 0.5 + Math.min(10, Population / 10000) * 0.3 + (60 - ETA) * 0.2
+       Current severity: ${currentSeverity}, population: ${currentPopulation}, ETA: ${currentEta}.
+       Rank current crisis against concurrent active incidents. Append this mathematical score and ranking rationale sentence inside "reasoning".
+    6. State inter-agency coordination needed. Include resource warnings if applicable.
     
     Respond ONLY in valid JSON: {
         "priority_level": string, "deployment": { "hub": string, "hub_address": string, "units": [string], "eta_mins": number, "eta_label": string },
-        "tactical_directive": string, "inter_agency_coordination": string, "nearest_facility": string, "reasoning": string
+        "tactical_directive": string, "inter_agency_coordination": string, "reasoning": string
     }`;
 
     let result;
@@ -173,16 +348,37 @@ export const strategist = async (state) => {
         result = heuristicPlan;
     }
 
+    // Merge resources_allocated into final result
+    if (!result.deployment) result.deployment = {};
+    result.deployment.resources_allocated = heuristicPlan.deployment.resources_allocated;
+
     const unitsDispatched = Array.isArray(result.deployment?.units)
         ? result.deployment.units.join(', ')
         : 'Emergency Units';
 
     console.log(`[Agent: The Strategist] Hub: "${result.deployment?.hub}" — ETA: ${result.deployment?.eta_mins} min — Units: ${unitsDispatched}`);
 
+    // Deduct live resources in DB
+    if (allHubs.length > 0) {
+        const updatedHubs = allHubs.map(h => {
+            if (h.id === selectedHub.id) {
+                return {
+                    ...h,
+                    trucks: Math.max(0, h.trucks - requirements.trucks),
+                    ambulances: Math.max(0, h.ambulances - requirements.ambulances),
+                    officers: Math.max(0, h.officers - requirements.officers)
+                };
+            }
+            return h;
+        });
+        await updateDepartmentResources(dept, updatedHubs);
+        console.log(`[Strategist] Deducted resources from ${selectedHub.name}: Trucks -${requirements.trucks}, Ambulances -${requirements.ambulances}, Officers -${requirements.officers}`);
+    }
+
     const log = {
         timestamp: new Date().toISOString(),
         agent: 'The Strategist',
-        message: `🗺️ TACTICAL PLAN LOCKED — ${unitsDispatched} dispatched from ${result.deployment?.hub}. ETA: ${result.deployment?.eta_label || result.deployment?.eta_mins + ' min'}. Route: ${routePrimary}. Police block: ${policeBlock}.`,
+        message: (warning ? `⚠️ ${warning}\n` : '') + `🗺️ TACTICAL PLAN LOCKED — ${unitsDispatched} dispatched from ${result.deployment?.hub}. ETA: ${result.deployment?.eta_label || result.deployment?.eta_mins + ' min'}.`,
         outcome: 'Plan Locked',
         details: result,
     };

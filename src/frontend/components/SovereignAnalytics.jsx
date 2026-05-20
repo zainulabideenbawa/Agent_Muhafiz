@@ -161,29 +161,39 @@ const SovereignAnalytics = ({ activeDept, departments }) => {
     );
 };
 
-const MetricCard = ({ icon: Icon, label, value, unit = "", color, trend }) => (
-    <div className="p-10 bg-[#09090b] border border-white/5 rounded-[2.5rem] backdrop-blur-3xl group hover:border-white/10 transition-all shadow-2xl relative">
-        <div className="flex justify-between items-start mb-10">
-            <div className={`p-3.5 rounded-2xl bg-zinc-900 border border-white/5 text-${color}-500 shadow-inner group-hover:scale-110 transition-transform`}>
-                <Icon size={20} />
-            </div>
-            {trend && (
-                <div className="flex flex-col items-end">
-                    <span className={`text-[10px] font-black font-mono text-${color}-500 tracking-tighter`}>{trend}</span>
-                    <div className={`w-8 h-0.5 mt-1 bg-${color}-500/20 rounded-full overflow-hidden`}>
-                        <div className={`w-2/3 h-full bg-${color}-500`} />
-                    </div>
+const MetricCard = ({ icon: Icon, label, value, unit = "", color, trend }) => {
+    const colorClasses = {
+        emerald: { text: 'text-emerald-500', bg: 'bg-emerald-500/20', bar: 'bg-emerald-500' },
+        blue: { text: 'text-blue-500', bg: 'bg-blue-500/20', bar: 'bg-blue-500' },
+        orange: { text: 'text-orange-500', bg: 'bg-orange-500/20', bar: 'bg-orange-500' },
+        red: { text: 'text-red-500', bg: 'bg-red-500/20', bar: 'bg-red-500' }
+    };
+    const c = colorClasses[color] || colorClasses.emerald;
+
+    return (
+        <div className="p-10 bg-[#09090b] border border-white/5 rounded-[2.5rem] backdrop-blur-3xl group hover:border-white/10 transition-all shadow-2xl relative">
+            <div className="flex justify-between items-start mb-10">
+                <div className={`p-3.5 rounded-2xl bg-zinc-900 border border-white/5 ${c.text} shadow-inner group-hover:scale-110 transition-transform`}>
+                    <Icon size={20} />
                 </div>
-            )}
-        </div>
-        <div>
-            <span className="text-zinc-600 text-[10px] font-black uppercase tracking-[0.2em] block mb-2">{label}</span>
-            <div className="flex items-baseline gap-2">
-                <span className="text-white text-4xl font-black font-mono tracking-tighter italic">{value}</span>
-                <span className="text-zinc-600 text-xs font-bold font-mono uppercase">{unit}</span>
+                {trend && (
+                    <div className="flex flex-col items-end">
+                        <span className={`text-[10px] font-black font-mono ${c.text} tracking-tighter`}>{trend}</span>
+                        <div className={`w-8 h-0.5 mt-1 ${c.bg} rounded-full overflow-hidden`}>
+                            <div className={`w-2/3 h-full ${c.bar}`} />
+                        </div>
+                    </div>
+                )}
+            </div>
+            <div>
+                <span className="text-zinc-600 text-[10px] font-black uppercase tracking-[0.2em] block mb-2">{label}</span>
+                <div className="flex items-baseline gap-2">
+                    <span className="text-white text-4xl font-black font-mono tracking-tighter italic">{value}</span>
+                    <span className="text-zinc-600 text-xs font-bold font-mono uppercase">{unit}</span>
+                </div>
             </div>
         </div>
-    </div>
-);
+    );
+};
 
 export default SovereignAnalytics;

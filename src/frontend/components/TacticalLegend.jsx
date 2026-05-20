@@ -3,7 +3,7 @@ import { Shield, AlertTriangle, Route, Info } from 'lucide-react';
 
 const TacticalLegend = () => {
     return (
-        <div className="absolute bottom-6 left-6 z-10 bg-black/80 backdrop-blur-md border border-emerald-500/30 p-4 rounded-xl shadow-2xl w-64">
+        <div className="bg-zinc-950/90 backdrop-blur-md border border-emerald-500/20 p-4 rounded-xl shadow-2xl w-64 relative">
             <h3 className="text-emerald-500 text-xs font-bold tracking-widest uppercase mb-3 flex items-center gap-2">
                 <Info size={14} /> Tactical Legend
             </h3>

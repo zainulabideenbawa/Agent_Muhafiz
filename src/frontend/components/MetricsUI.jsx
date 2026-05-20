@@ -70,12 +70,20 @@ const MetricsUI = ({ activeCrises, deptStats, livesSaved, toggleSidebar, activeD
     );
 };
 
-const HeaderVital = ({ label, value, color }) => (
-    <div className="flex items-baseline gap-2">
-        <span className="text-[7px] font-black text-zinc-600 uppercase tracking-widest">{label}</span>
-        <span className={`text-[11px] font-mono font-black text-${color}-500/90 tracking-tighter`}>{value}</span>
-    </div>
-);
+const HeaderVital = ({ label, value, color }) => {
+    const textColors = {
+        emerald: 'text-emerald-500/90',
+        orange: 'text-orange-500/90',
+        blue: 'text-blue-500/90',
+        red: 'text-red-500/90'
+    };
+    return (
+        <div className="flex items-baseline gap-2">
+            <span className="text-[7px] font-black text-zinc-600 uppercase tracking-widest">{label}</span>
+            <span className={`text-[11px] font-mono font-black ${textColors[color] || 'text-zinc-400'} tracking-tighter`}>{value}</span>
+        </div>
+    );
+};
 
 const HeaderMetric = ({ label, value, color }) => (
     <div className="flex flex-col items-end">

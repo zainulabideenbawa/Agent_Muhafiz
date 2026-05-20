@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { saveIncident, updateIncidentState, getAllIncidents } from '../db/index.js';
+import { saveIncident, updateIncidentState, getAllIncidents, getIncidentById, getDepartmentResources, updateDepartmentResources } from '../db/index.js';
 import { runSovereignLogic } from '../sovereign_logic.js';
 import { broadcast } from '../websocket.js';
 
@@ -93,6 +93,8 @@ router.get('/', async (req, res) => {
                 analyst_prediction: impact.spread_prediction
                     ? `${impact.spread_prediction} spread · ${impact.affected_population ?? '?'} affected · ${impact.estimated_duration ?? '?'}`
                     : null,
+                secondary_hazards: cls.secondary_hazards ?? d.secondary_hazards ?? [],
+                coordinated_sla: d.coordinated_sla ?? null,
             };
         });
         res.json(normalized);
@@ -122,12 +124,37 @@ router.post('/retract-alert', async (req, res) => {
 
     console.log(`[Auditor Agent] ALERT RETRACTION (${resolution}): ${incidentId} — ${reason}`);
     try {
+        // Reclaim allocated resources if any
+        const incident = await getIncidentById(incidentId);
+        const incidentData = incident?.data || {};
+        const allocated = incidentData.deployment?.resources_allocated;
+        
+        let reclaimLog = '';
+        if (allocated) {
+            const { hubId, dept, trucks, ambulances, officers } = allocated;
+            const hubs = await getDepartmentResources(dept);
+            const updatedHubs = hubs.map(h => {
+                if (h.id === hubId) {
+                    return {
+                        ...h,
+                        trucks: h.trucks + (trucks || 0),
+                        ambulances: h.ambulances + (ambulances || 0),
+                        officers: h.officers + (officers || 0)
+                    };
+                }
+                return h;
+            });
+            await updateDepartmentResources(dept, updatedHubs);
+            reclaimLog = ` Reclaimed resources: Trucks +${trucks || 0}, Ambulances +${ambulances || 0}, Officers +${officers || 0} returned to ${hubId}.`;
+            console.log(`[Auditor: Resource Reclaim] ${reclaimLog}`);
+        }
+
         await updateIncidentState(incidentId, 'RETRACTED', {
             retraction_reason: reason,
             resolution_type: resolution,
             traceLogs: [{
                 agent: 'The Auditor',
-                message: `${resolutionLabel}: Field officer verification confirms — ${reason}. All dispatched units recalled. Incident closed.`,
+                message: `${resolutionLabel}: Field officer verification confirms — ${reason}. All dispatched units recalled. Incident closed.${reclaimLog}`,
                 outcome: resolution,
                 timestamp: new Date().toISOString()
             }]
@@ -139,7 +166,7 @@ router.post('/retract-alert', async (req, res) => {
             incidentId,
             log: {
                 agent: 'The Auditor',
-                message: `${resolutionLabel}: Field officer confirms ${reason}. Units recalled.`,
+                message: `${resolutionLabel}: Field officer confirms ${reason}. Units recalled.${reclaimLog}`,
                 outcome: resolution,
                 timestamp: new Date().toISOString()
             }
@@ -151,7 +178,7 @@ router.post('/retract-alert', async (req, res) => {
             incidentId,
             resolution,
             label: resolutionLabel,
-            message: `Incident ${incidentId} marked as ${resolutionLabel}. All units recalled and traffic corridor restored.`,
+            message: `Incident ${incidentId} marked as ${resolutionLabel}. All units recalled, resources returned, and traffic corridor restored.`,
             reason: reason || 'Field officer ground-truth verification',
             timestamp: new Date().toISOString()
         });
@@ -208,8 +235,11 @@ router.post('/confirm-crisis', async (req, res) => {
     const { incidentId, note } = req.body;
     console.log(`[Auditor Agent] CRISIS CONFIRMED: ${incidentId} - ${note}`);
     try {
+        const existingIncident = await getIncidentById(incidentId);
+        const signalText = existingIncident?.description || existingIncident?.data?.raw_input || "NIPA doob gaya";
+
         await updateIncidentState(incidentId, 'CONFIRMED', {
-            officer_verdict: 'CONFIRMED',
+            officer_status: 'CONFIRMED',
             officer_note: note || 'Crisis confirmed by field officer.',
             resolution_type: 'CONFIRMED',
             traceLogs: [{
@@ -241,6 +271,9 @@ router.post('/confirm-crisis', async (req, res) => {
             reason: note || 'Field officer ground-truth confirmation',
             timestamp: new Date().toISOString()
         });
+
+        // Run agent pipeline asynchronously to complete the dispatch, simulation, and auditing
+        runSovereignLogic(incidentId, signalText).catch(err => console.error('[Pipeline Error]', err));
 
         res.json({ success: true });
     } catch (e) {

@@ -19,11 +19,19 @@ const CityVitals = () => {
 
     if (!vitals) return null;
 
-    const VitalItem = ({ icon: Icon, label, value, unit, color }) => (
-        <div className="flex items-center gap-3 px-4 py-2 bg-black/40 border border-white/5 rounded-xl backdrop-blur-md">
-            <div className={`p-1.5 rounded-lg bg-${color}-500/10 text-${color}-500`}>
-                <Icon size={14} />
-            </div>
+    const VitalItem = ({ icon: Icon, label, value, unit, color }) => {
+        const themeClasses = {
+            emerald: 'bg-emerald-500/10 text-emerald-500',
+            orange: 'bg-orange-500/10 text-orange-500',
+            blue: 'bg-blue-500/10 text-blue-500',
+            red: 'bg-red-500/10 text-red-500'
+        };
+        const c = themeClasses[color] || themeClasses.emerald;
+        return (
+            <div className="flex items-center gap-3 px-4 py-2 bg-black/40 border border-white/5 rounded-xl backdrop-blur-md">
+                <div className={`p-1.5 rounded-lg ${c}`}>
+                    <Icon size={14} />
+                </div>
             <div className="flex flex-col">
                 <span className="text-[7px] font-black text-zinc-500 uppercase tracking-widest">{label}</span>
                 <div className="flex items-baseline gap-0.5">
@@ -33,6 +41,7 @@ const CityVitals = () => {
             </div>
         </div>
     );
+};
 
     return (
         <div className="flex gap-4 pointer-events-auto">

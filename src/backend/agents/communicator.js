@@ -45,6 +45,10 @@ export const communicator = async (state) => {
             en: `${emoji} ROAD CLOSURE — ${loc}. Traffic Police managing diversion via ${primaryRoute}. Avoid the area. Ambulance corridor maintained for emergencies.`,
             ur: `${emoji} سڑک بند — ${loc}۔ ${primaryRoute} سے متبادل راستہ استعمال کریں۔ ایمبولینس کا راستہ کھلا ہے۔ ٹریفک پولیس موجود ہے۔`,
         },
+        proactive_maintenance: {
+            en: "",
+            ur: "",
+        },
     };
 
     // Detailed WhatsApp drafts
@@ -65,27 +69,39 @@ export const communicator = async (state) => {
             en: `🚨 MUHAFIZ-X TRAFFIC ALERT\n━━━━━━━━━━━━━━━━━━━━━━━━\n🚧 INCIDENT: ROAD CLOSURE / PROTEST\n📍 LOCATION: ${loc}\n━━━━━━━━━━━━━━━━━━━━━━━━\n✅ TRAFFIC MANAGEMENT:\n• Traffic Police deployed at ${policeBlock}\n• ALTERNATE ROUTE: ${primaryRoute}\n• Ambulance corridor maintained\n• ${nearestHospital} — emergency access preserved\n━━━━━━━━━━━━━━━━━━━━━━━━\n📌 USE ALTERNATE ROUTES:\n• ${primaryRoute}\n• Avoid: ${policeBlock} area entirely\n• Traffic Police Hotline: 021-35662001`,
             ur: `🚨 محافظ-X ٹریفک الرٹ\n━━━━━━━━━━━━━━━━━━━━━━━━\n🚧 واقعہ: سڑک بندش\n📍 مقام: ${loc}\n━━━━━━━━━━━━━━━━━━━━━━━━\n✅ متبادل راستہ: ${primaryRoute}\n• ${policeBlock} سے دور رہیں\n• ٹریفک پولیس موجود\n• ہنگامی نمبر: 15`,
         },
+        proactive_maintenance: {
+            en: "",
+            ur: "",
+        },
     };
 
     const push = pushMessages[crisisType] || pushMessages.flood;
     const whatsapp = whatsappDrafts[crisisType] || whatsappDrafts.flood;
 
-    const mayorBrief = `Mayor's Security Brief — ${new Date().toLocaleTimeString('en-PK', { timeZone: 'Asia/Karachi' })}: ` +
-        `${crisisType.toUpperCase()} confirmed at ${loc} (Urgency: ${urgency}/10). ` +
-        `${dept} dispatched from ${hub} — ETA ${etaMins} min via ${primaryRoute}. ` +
-        `Police route clearance at ${policeBlock}. ` +
-        `${nearestHospital} placed on standby. ` +
-        `${isGlobal ? 'CITY-WIDE alert issued.' : 'Local 5km alert zone active.'} Muhafiz-X autonomous pipeline complete.`;
+    let mayorBrief = "";
+    if (crisisType === 'proactive_maintenance') {
+        mayorBrief = `Mayor's Security Brief (SECURE/PRIVATE) — ${new Date().toLocaleTimeString('en-PK', { timeZone: 'Asia/Karachi' })}: ` +
+            `Pre-emptive sludge suction deployment initiated at University Road (BRT Red Line Corridor) due to 85% drainage capacity usage and incoming precipitation forecast > 30mm. ` +
+            `Public alerts suppressed. Automated work tickets routed to Karachi Water & Sewerage Corporation (KWSC) and Frontier Works Organisation (FWO). ` +
+            `Tactical route avoidance instructions active for the BRT construction zone.`;
+    } else {
+        mayorBrief = `Mayor's Security Brief — ${new Date().toLocaleTimeString('en-PK', { timeZone: 'Asia/Karachi' })}: ` +
+            `${crisisType.toUpperCase()} confirmed at ${loc} (Urgency: ${urgency}/10). ` +
+            `${dept} dispatched from ${hub} — ETA ${etaMins} min via ${primaryRoute}. ` +
+            `Police route clearance at ${policeBlock}. ` +
+            `${nearestHospital} placed on standby. ` +
+            `${isGlobal ? 'CITY-WIDE alert issued.' : 'Local 5km alert zone active.'} Muhafiz-X autonomous pipeline complete.`;
+    }
 
     const dynamicFallback = {
-        scope: isGlobal ? 'GLOBAL' : 'LOCAL',
-        radius_km: isGlobal ? 15 : 5,
+        scope: crisisType === 'proactive_maintenance' ? 'SILENT' : (isGlobal ? 'GLOBAL' : 'LOCAL'),
+        radius_km: crisisType === 'proactive_maintenance' ? 0 : (isGlobal ? 15 : 5),
         push_notification: push,
         whatsapp_draft: whatsapp,
         mayor_brief: mayorBrief,
     };
 
-    const systemPrompt = `You are the Voice of Muhafiz-X, Karachi's Sovereign Emergency Communication System.
+    let systemPrompt = `You are the Voice of Muhafiz-X, Karachi's Sovereign Emergency Communication System.
     CRISIS: ${crisisType.toUpperCase()} at ${loc}
     DEPLOYMENT: ${JSON.stringify(action_plan?.deployment || {})}
     ROUTE: ${primaryRoute}
@@ -94,7 +110,16 @@ export const communicator = async (state) => {
     Generate bilingual (English + Urdu) emergency broadcasts. Be specific to ${loc}, not generic.
     Include: specific route alternatives, exact emergency numbers, specific unit ETAs, hospital names.
     
-    Output ONLY JSON: { "scope": "LOCAL"|"GLOBAL", "radius_km": number, "push_notification": {"en": string, "ur": string}, "whatsapp_draft": {"en": string, "ur": string}, "mayor_brief": string }`;
+    Output ONLY JSON: { "scope": "LOCAL"|"GLOBAL"|"SILENT", "radius_km": number, "push_notification": {"en": string, "ur": string}, "whatsapp_draft": {"en": string, "ur": string}, "mayor_brief": string }`;
+
+    if (crisisType === 'proactive_maintenance') {
+        systemPrompt += `\nSPECIAL RULES FOR PROACTIVE MAINTENANCE:
+        1. This is a preventative infrastructure clearance (University Road BRT Red Line drainage scenario).
+        2. DO NOT issue public alerts. You MUST suppress all public notifications.
+        3. Force scope to 'SILENT' and radius_km to 0.
+        4. Push notification and WhatsApp draft MUST have empty strings for 'en' and 'ur' to avoid public panic.
+        5. The mayor_brief MUST be a highly detailed private, secure brief outlining the pre-emptive sludge suction deployment to KWSC (Karachi Water & Sewerage Corporation) and FWO (Frontier Works Organisation) to clear the drainage blockages along the BRT Red Line corridor on University Road before the storm hits, avoiding public panic. Include details about suction trucks and depots.`;
+    }
 
     let result;
     try {
@@ -108,13 +133,26 @@ export const communicator = async (state) => {
         result = dynamicFallback;
     }
 
+    // Force and lock communication configuration for proactive maintenance regardless of LLM output
+    if (crisisType === 'proactive_maintenance') {
+        result.scope = 'SILENT';
+        result.radius_km = 0;
+        result.push_notification = { en: "", ur: "" };
+        result.whatsapp_draft = { en: "", ur: "" };
+        if (!result.mayor_brief || !result.mayor_brief.toLowerCase().includes('kwsc')) {
+            result.mayor_brief = mayorBrief;
+        }
+    }
+
     console.log(`[Agent: The Communicator] Scope: ${result.scope} (${result.radius_km}km). Push: "${result.push_notification?.en?.substring(0, 80)}..."`);
 
     const log = {
         timestamp: new Date().toISOString(),
         agent: 'The Communicator',
-        message: `📡 ${result.scope} broadcast issued (${result.radius_km}km radius). Push + WhatsApp alerts dispatched in EN/UR. Mayor briefed.`,
-        outcome: 'Broadcast Issued',
+        message: result.scope === 'SILENT'
+            ? `📡 SILENT preventative infrastructure dispatch. No public notifications issued. Secure private briefing dispatched to the Mayor.`
+            : `📡 ${result.scope} broadcast issued (${result.radius_km}km radius). Push + WhatsApp alerts dispatched in EN/UR. Mayor briefed.`,
+        outcome: result.scope === 'SILENT' ? 'Silent Dispatch Actioned' : 'Broadcast Issued',
         details: result,
     };
 
@@ -123,3 +161,4 @@ export const communicator = async (state) => {
         traceLogs: [log],
     };
 };
+
