@@ -169,6 +169,20 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
                         </div>
                     )}
 
+                    {user.role === 'SUPER_ADMIN' && (
+                        <div className="relative group">
+                            <button
+                                onClick={() => { setDashboardView('USERS'); setView('dashboard'); setSidebarOpen(true); }}
+                                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${dashboardView === 'USERS' ? 'bg-purple-500/20 text-purple-500 border border-purple-500/30' : 'text-zinc-500 hover:bg-white/5'}`}
+                            >
+                                <Users size={16} />
+                            </button>
+                            <div className="absolute left-14 top-1/2 -translate-y-1/2 ml-2 px-3 py-1.5 rounded-lg bg-zinc-950/95 border border-purple-500/20 text-purple-500 text-[9px] font-black tracking-widest uppercase pointer-events-none opacity-0 scale-95 origin-left group-hover:opacity-100 group-hover:scale-100 transition-all duration-300 backdrop-blur-md shadow-2xl whitespace-nowrap z-[100]">
+                                User Management
+                            </div>
+                        </div>
+                    )}
+
                     <div className="relative group">
                         <button
                             onClick={() => { setDashboardView('BROADCAST'); setView('dashboard'); setSidebarOpen(true); }}
@@ -300,6 +314,17 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
                                 <Cpu size={14} /> Urban Optimization
                             </div>
                             {dashboardView === 'ADMIN' && <div className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />}
+                        </button>
+                    )}
+                    {user.role === 'SUPER_ADMIN' && (
+                        <button
+                            onClick={() => { setDashboardView('USERS'); setView('dashboard'); setSidebarOpen(false); }}
+                            className={`flex items-center justify-between px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${dashboardView === 'USERS' ? 'bg-purple-500/20 text-purple-500 border border-purple-500/30' : 'text-zinc-500 hover:bg-white/5'}`}
+                        >
+                            <div className="flex items-center gap-3">
+                                <Users size={14} /> User Management
+                            </div>
+                            {dashboardView === 'USERS' && <div className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />}
                         </button>
                     )}
                     <button

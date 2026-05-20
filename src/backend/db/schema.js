@@ -35,10 +35,12 @@ export const department_hubs = pgTable('department_hubs', {
 export const command_profiles = pgTable('command_profiles', {
     id: serial('id').primaryKey(),
     commander_id: text('commander_id').unique().notNull(),
-    email: text('email'),
+    email: text('email').unique(),
+    cnic: text('cnic'),
     name: text('name').notNull(),
     rank: text('rank').notNull(),
     department: text('department').notNull(),
+    password: text('password'),
     permissions: jsonb('permissions').default([]),
     last_login: timestamp('last_login', { withTimezone: true }).defaultNow(),
 });

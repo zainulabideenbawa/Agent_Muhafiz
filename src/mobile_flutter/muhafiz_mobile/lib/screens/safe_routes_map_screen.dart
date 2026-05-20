@@ -102,8 +102,8 @@ class _SafeRoutesMapScreenState extends State<SafeRoutesMapScreen> with TickerPr
           if (raw is! Map) continue;
           final item = Map<String, dynamic>.from(raw);
 
-          final String status = (item['status'] ?? '').toString();
-          if (status == 'RESOLVED' || status == 'RETRACTED') continue;
+          final String status = (item['status'] ?? '').toString().toUpperCase();
+          if (status == 'RESOLVED' || status == 'RETRACTED' || status == 'COMPLETED') continue;
 
           // Safely extract incident_id — guard against it being a nested object
           final dynamic rawId = item['incident_id'];

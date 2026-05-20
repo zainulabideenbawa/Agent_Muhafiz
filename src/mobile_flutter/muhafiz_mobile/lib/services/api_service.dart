@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/feedback_widgets.dart';
 
 class ApiService {
@@ -20,10 +21,16 @@ class ApiService {
   ) async {
     try {
       print("[API] POST $_baseUrl$path");
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token') ?? '';
+
       final response = await http
           .post(
             Uri.parse('$_baseUrl$path'),
-            headers: {'Content-Type': 'application/json'},
+            headers: {
+              'Content-Type': 'application/json',
+              if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+            },
             body: jsonEncode(body),
           )
           .timeout(const Duration(seconds: 10));
@@ -40,8 +47,17 @@ class ApiService {
   static Future<Map<String, dynamic>> get(String path) async {
     try {
       print("[API] GET $_baseUrl$path");
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token') ?? '';
+
       final response = await http
-          .get(Uri.parse('$_baseUrl$path'))
+          .get(
+            Uri.parse('$_baseUrl$path'),
+            headers: {
+              'Content-Type': 'application/json',
+              if (token.isNotEmpty) 'Authorization': 'Bearer $token',
+            },
+          )
           .timeout(const Duration(seconds: 10));
 
       return _handleResponse(response);

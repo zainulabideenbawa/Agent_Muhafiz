@@ -32,6 +32,9 @@ class OfficerAuthService {
           'officer_role',
           data['user']?['role'] ?? 'OFFICER',
         );
+        if (data['token'] != null) {
+          await prefs.setString('auth_token', data['token']);
+        }
       }
       return data;
     } catch (e) {
@@ -52,8 +55,23 @@ class OfficerAuthService {
 
   static Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token') ?? '';
+    try {
+      if (token.isNotEmpty) {
+        await http.post(
+          Uri.parse('$_baseUrl/logout'),
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer $token',
+          },
+        ).timeout(const Duration(seconds: 5));
+      }
+    } catch (e) {
+      print("Revoke token on logout failed: $e");
+    }
     await prefs.remove('officer_email');
     await prefs.remove('officer_name');
     await prefs.remove('officer_role');
+    await prefs.remove('auth_token');
   }
 }
