@@ -26,10 +26,12 @@ export const truthEngine = async (state) => {
     let calculatedConfidence = 0.85;
     let fallbackReason = `Heuristic telemetry validation confirmed normal thresholds for ${landmark}.`;
     let additionalSources = ["City Telemetry Grid", "Sensors Hub"];
+    let twitterPosts = [];
 
     if (isMajorCrisis) {
         // Perform reactive Twitter OSINT Verification
         const osintResult = await verifyCrisisFromTwitter(crisisType, landmark);
+        twitterPosts = osintResult?.posts || [];
         
         if (osintResult.verified && osintResult.posts.length > 0) {
             calculatedConfidence = 0.98;
@@ -103,7 +105,12 @@ export const truthEngine = async (state) => {
         timestamp: new Date().toISOString(),
         agent: "The Truth-Engine",
         message: `Verified against ${vitals.location || landmark} telemetry. Confidence: ${confidenceLevel}.`,
-        outcome: result.verdict || "Verified"
+        outcome: result.verdict || "Verified",
+        details: {
+            verdict: result.verdict || "Verified",
+            confidence_level: confidenceLevel,
+            twitter_posts: twitterPosts
+        }
     };
 
     // Only return the fields this agent owns — do NOT return a full classification
@@ -114,6 +121,7 @@ export const truthEngine = async (state) => {
             confidence_level: confidenceLevel,
             verification_sources: result.classification?.verification_sources ?? [],
             verdict: result.verdict || "Verified",
+            twitter_posts: twitterPosts
         },
         traceLogs: [log]
     };

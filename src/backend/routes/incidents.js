@@ -5,6 +5,61 @@ import { broadcast } from '../websocket.js';
 
 const router = Router();
 
+// Quick pre-classifier — mirrors Sentinel heuristics so the incident record
+// gets a meaningful type/location from the very first DB write.
+const QUICK_CRISIS_KW = {
+    fire:    ['fire', 'aag', 'aag lagi', 'aag lag', 'jal', 'jal raha', 'jal gaya', 'blaze', 'smoke', 'dhuan', 'dhuwan', 'flames'],
+    flood:   ['flood', 'doob', 'pani', 'barish', 'baarish', 'waterlog', 'water logging', 'submerged', 'paani', 'doob gaya'],
+    blast:   ['blast', 'dhamaka', 'explosion', 'bomb', 'attack', 'boom'],
+    protest: ['protest', 'dharna', 'strike', 'rally', 'road blocked', 'jam', 'jams', 'traffic jam', 'band', 'shutdown', 'block'],
+};
+const QUICK_ZONES = [
+    { key: 'nipa',           label: 'NIPA Chowrangi, Gulshan-e-Iqbal, Karachi' },
+    { key: 'gulshan',        label: 'Gulshan-e-Iqbal, Karachi' },
+    { key: 'saddar',         label: 'Saddar, Karachi' },
+    { key: 'burn road',      label: 'Burns Road, Saddar, Karachi' },
+    { key: 'burns road',     label: 'Burns Road, Saddar, Karachi' },
+    { key: 'clifton',        label: 'Clifton, Karachi' },
+    { key: 'boatbasin',      label: 'Boat Basin, Clifton, Karachi' },
+    { key: 'boat basin',     label: 'Boat Basin, Clifton, Karachi' },
+    { key: 'baotbasin',      label: 'Boat Basin, Clifton, Karachi' },
+    { key: 'defence',        label: 'DHA Defence, Karachi' },
+    { key: 'dha',            label: 'DHA Defence, Karachi' },
+    { key: 'liaquatabad',    label: 'Liaquatabad, Karachi' },
+    { key: 'nazimabad',      label: 'Nazimabad, Karachi' },
+    { key: 'karsaz',         label: 'Karsaz, Karachi' },
+    { key: 'korangi',        label: 'Korangi, Karachi' },
+    { key: 'landhi',         label: 'Landhi, Karachi' },
+    { key: 'orangi',         label: 'Orangi Town, Karachi' },
+    { key: 'johar',          label: 'Johar, Karachi' },
+    { key: 'malir',          label: 'Malir, Karachi' },
+    { key: 'fb area',        label: 'F.B. Area, Karachi' },
+    { key: 'federal b',      label: 'F.B. Area, Karachi' },
+    { key: 'university road',label: 'University Road, Karachi' },
+    { key: 'university rap', label: 'University Road, Karachi' },
+    { key: 'uni road',       label: 'University Road, Karachi' },
+    { key: 'ma jinnah',      label: 'M.A. Jinnah Road, Karachi' },
+    { key: 'jinnah road',    label: 'M.A. Jinnah Road, Karachi' },
+    { key: 'site area',      label: 'S.I.T.E. Industrial Area, Karachi' },
+    { key: 'lyari',          label: 'Lyari, Karachi' },
+    { key: 'baldia',         label: 'Baldia Town, Karachi' },
+    { key: 'surjani',        label: 'Surjani Town, Karachi' },
+    { key: 'north karachi',  label: 'North Karachi, Karachi' },
+    { key: 'north nazimabad',label: 'North Nazimabad, Karachi' },
+];
+const quickClassify = (text) => {
+    const lower = (text || '').toLowerCase();
+    let crisisType = 'UNKNOWN';
+    for (const [type, kws] of Object.entries(QUICK_CRISIS_KW)) {
+        if (kws.some(kw => lower.includes(kw))) { crisisType = type.toUpperCase(); break; }
+    }
+    let location = 'Karachi';
+    for (const zone of QUICK_ZONES) {
+        if (lower.includes(zone.key)) { location = zone.label; break; }
+    }
+    return { crisisType, location };
+};
+
 router.get('/', async (req, res) => {
     try {
         const raw = await getAllIncidents(20);
@@ -41,8 +96,12 @@ router.get('/', async (req, res) => {
 router.post('/trigger-crisis', async (req, res) => {
     const signal = req.body.signal || req.body.input;
     const incidentId = `MHFZ-${Math.floor(1000 + Math.random() * 9000)}`;
-    await saveIncident(incidentId, 'UNKNOWN', 'ANALYZING', signal);
-    console.log(`[Incident Triggered] ${signal} - Saved to queue.`);
+    // Pre-classify from signal text so the record immediately shows correct type + location
+    const { crisisType, location } = quickClassify(signal);
+    await saveIncident(incidentId, crisisType, location, signal);
+    console.log(`[Incident Triggered] type=${crisisType}, location="${location}", signal="${signal}" — saved as ${incidentId}`);
+    // Run agent pipeline asynchronously
+    runSovereignLogic(incidentId, signal).catch(err => console.error('[Pipeline Error]', err));
     res.json({ success: true, incidentId });
 });
 
