@@ -54,7 +54,7 @@ const questHalt = async (state) => {
 /** Conditional router: high-confidence → full pipeline, low-confidence → HITL quest */
 const routeAfterTruthEngine = (state) => {
     const confidence = state.classification?.confidence_level ?? 1.0;
-    return confidence >= 0.8 ? "TheAnalyst" : "QuestHalt";
+    return confidence >= 0.8 ? "TheDispatcher" : "QuestHalt";
 };
 
 const workflow = new StateGraph({ channels: crisisStateSchema });
@@ -69,16 +69,16 @@ workflow.addNode("TheCommunicator", communicator);
 workflow.addNode("TheAuditor", auditor);
 workflow.addNode("QuestHalt", questHalt);
 
-workflow.addEdge(START, "TheDispatcher");
-workflow.addEdge("TheDispatcher", "TheSentinel");
+workflow.addEdge(START, "TheSentinel");
 workflow.addEdge("TheSentinel", "TheTruthEngine");
 
 // HITL conditional branch after verification
 workflow.addConditionalEdges("TheTruthEngine", routeAfterTruthEngine, {
-    "TheAnalyst": "TheAnalyst",
+    "TheDispatcher": "TheDispatcher",
     "QuestHalt": "QuestHalt"
 });
 
+workflow.addEdge("TheDispatcher", "TheAnalyst");
 workflow.addEdge("TheAnalyst", "TheStrategist");
 workflow.addEdge("TheStrategist", "TheOracle");
 workflow.addEdge("TheOracle", "TheCommunicator");

@@ -179,7 +179,7 @@ function App() {
           department: data.assigned_department
         }]);
 
-        if (data.log.agent === 'The Sentinel' && data.log.outcome === 'Success') {
+        if (data.log.agent === 'The Sentinel' && (data.log.outcome === 'Success' || data.log.outcome === 'Crisis Confirmed')) {
           const sentinelLoc = data.log.details?.location;
           const landmarkName = sentinelLoc?.landmark || data.log.message.split('at ')[1]?.replace('.', '') || 'NIPA Chowrangi';
           const hasBackendCoords = sentinelLoc?.lat && sentinelLoc?.lng;
@@ -187,17 +187,29 @@ function App() {
             ? { lng: sentinelLoc.lng, lat: sentinelLoc.lat }
             : resolveHotspotCoordinates(landmarkName);
 
-          setIncidents(prev => [...prev, {
-            id: data.incidentId,
-            department: data.assigned_department,
-            type: data.log.message.includes('fire') ? 'fire' : 'urban_flood',
-            location: {
-              landmark: landmarkName,
-              lng: coords.lng,
-              lat: coords.lat
-            },
-            status: 'ACTIVE'
-          }]);
+          let dept = data.assigned_department || 'KMC_HEALTH';
+          const typeStr = (data.log.details?.type || '').toLowerCase();
+          if (typeStr.includes('fire')) dept = 'FIRE_BRIGADE';
+          else if (typeStr.includes('blast')) dept = 'POLICE_FORCE';
+          else if (typeStr.includes('protest')) dept = 'POLICE_FORCE';
+          else if (typeStr.includes('flood')) dept = 'RESCUE_1122';
+
+          setIncidents(prev => {
+            if (prev.some(inc => inc.id === data.incidentId)) {
+              return prev.map(inc => inc.id === data.incidentId ? { ...inc, department: dept, location: { landmark: landmarkName, ...coords } } : inc);
+            }
+            return [...prev, {
+              id: data.incidentId,
+              department: dept,
+              type: typeStr || 'urban_flood',
+              location: {
+                landmark: landmarkName,
+                lng: coords.lng,
+                lat: coords.lat
+              },
+              status: 'ACTIVE'
+            }];
+          });
         }
 
         // Live Incident Status Synchronizer (Field Officer & Auditor Actions)
@@ -302,10 +314,15 @@ function App() {
   }, []);
 
   // Unified Filtering Logic
-  const filteredIncidents = (incidents || []).filter(inc =>
-    !inc || !inc.department || inc.department === activeDept || inc.support_agency === activeDept
-  );
+  const filteredIncidents = (incidents || []).filter(inc => {
+    if (!inc) return false;
+    if (user?.role === 'SUPER_ADMIN') return true;
+    if (inc.status === 'QUEST_ACTIVE' || inc.status === 'INVESTIGATING' || inc.status === 'PENDING') return true;
+    return !inc.department || inc.department === activeDept || inc.support_agency === activeDept;
+  });
   const filteredTraces = (traces || []).filter(t => {
+    if (!t) return false;
+    if (user?.role === 'SUPER_ADMIN') return true;
     // System logs and The Dispatcher logs are ALWAYS visible for situational awareness
     if (!t.department || t.log.agent === 'The Dispatcher') return true;
     return t.department === activeDept || t.support_agency === activeDept;

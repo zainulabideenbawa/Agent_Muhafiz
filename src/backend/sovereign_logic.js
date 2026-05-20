@@ -94,6 +94,14 @@ const _runPipeline = async (incidentId, input) => {
             finalState = {
                 ...finalState,
                 ...stateUpdate,
+                classification: (finalState.classification || stateUpdate.classification) ? {
+                    ...(finalState.classification || {}),
+                    ...(stateUpdate.classification || {})
+                } : undefined,
+                metadata: (finalState.metadata || stateUpdate.metadata) ? {
+                    ...(finalState.metadata || {}),
+                    ...(stateUpdate.metadata || {})
+                } : undefined,
             };
 
             if (stateUpdate?.traceLogs?.length > 0) {

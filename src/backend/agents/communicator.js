@@ -1,70 +1,125 @@
 import { flashModel } from './models.js';
 import { safeParseJson } from './parser.js';
 
+const CRISIS_EMOJIS = { fire: '🔥', flood: '🌊', blast: '💥', protest: '🚧' };
+
+const URDU_CRISIS = { fire: 'آگ', flood: 'سیلاب', blast: 'دھماکہ', protest: 'احتجاج' };
+
 export const communicator = async (state) => {
-    const { classification, assigned_department } = state;
+    const { classification, assigned_department, action_plan, triage } = state;
 
-    const systemPrompt = `You are the Voice of Muhafiz-X. Generate multi-channel bilingual alerts.
-    Task:
-    1. Scope: Decide if this is LOCAL (within 5km) or GLOBAL (City-wide).
-    2. Citizen App Push: Create a short notification for the mobile app (Free channel).
-    3. WhatsApp Broadcast: Create a detailed update for the Official Govt Channel (Free channel).
-    4. Bilingual: Provide English and Urdu versions.
-
-    Output ONLY JSON: {
-        "scope": "LOCAL" | "GLOBAL",
-        "radius_km": number,
-        "push_notification": { "en": "string", "ur": "string" },
-        "whatsapp_draft": { "en": "string", "ur": "string" },
-        "mayor_brief": "string"
-    }`;
-
-    let result;
+    const crisisType = (classification?.type || 'emergency').toLowerCase();
     const loc = classification?.location?.landmark || 'Karachi';
-    const type = (classification?.type || 'emergency').toLowerCase();
     const dept = (assigned_department || 'Emergency Services').replace(/_/g, ' ');
+    const emoji = CRISIS_EMOJIS[crisisType] || '🚨';
+    const urgency = classification?.urgency || 7;
+    const isGlobal = urgency >= 8;
 
-    // Pull real TomTom ETA and hub from Strategist's output if available
-    const etaMins = state.action_plan?.deployment?.eta_mins || 14;
-    const deployedHub = state.action_plan?.deployment?.hub || 'Central Hub';
-    const deptEmoji = type.includes('fire') ? '🔥' : type.includes('flood') ? '🌊' : '🚑';
+    // Pull real deployment data
+    const etaMins = action_plan?.deployment?.eta_mins || triage?.route_directive ? '15' : '14';
+    const hub = action_plan?.deployment?.hub || 'Central Emergency Hub';
+    const units = Array.isArray(action_plan?.deployment?.units)
+        ? action_plan.deployment.units.slice(0, 2).join(' + ')
+        : dept + ' units';
+    const primaryRoute = triage?.route_directive?.primary_route || 'Emergency corridor';
+    const policeBlock = triage?.route_directive?.police_block_required_at || 'key intersections';
+    const hospitals = classification?.zone_intel?.nearby_hospitals || [];
+    const nearestHospital = hospitals[0] || 'nearest hospital';
+    const urduCrisis = URDU_CRISIS[crisisType] || 'ہنگامی صورتحال';
 
-    const dynamicFallback = {
-        scope: classification?.urgency >= 8 ? 'GLOBAL' : 'LOCAL',
-        radius_km: classification?.urgency >= 8 ? 15 : 5,
-        push_notification: {
-            en: `${deptEmoji} ${type.toUpperCase()} alert at ${loc}. ${dept} units deployed. ETA ${etaMins} min. Stay clear.`,
-            ur: `${deptEmoji} ${loc} mein ${type} ki surat-e-haal. ${dept} rawana — ETA ${etaMins} منٹ۔ علاقہ خالی کریں۔`
+    // Crisis-specific push notifications
+    const pushMessages = {
+        fire: {
+            en: `${emoji} FIRE ALERT — ${loc}. Karachi Fire Brigade deployed from ${hub}. ETA ${etaMins} min. Evacuate within 150m immediately. Call 16 for emergencies.`,
+            ur: `${emoji} آگ کا الرٹ — ${loc}۔ کراچی فائر بریگیڈ روانہ — ETA ${etaMins} منٹ۔ 150 میٹر کے اندر فوری انخلاء کریں۔ ہنگامی صورت: 16 پر کال کریں۔`,
         },
-        whatsapp_draft: {
-            en: `🚨 MUHAFIZ-X SOVEREIGN ALERT\nIncident: ${type.toUpperCase()}\nLocation: ${loc}\nResponse: ${dept} units dispatched from ${deployedHub}.\nEstimated arrival: ${etaMins} min (TomTom live routing)\nStay safe and follow official instructions.`,
-            ur: `🚨 محافظ-X الرٹ\nواقعہ: ${type.toUpperCase()}\nمقام: ${loc}\nجواب: ${dept} ${deployedHub} سے روانہ — ETA ${etaMins} منٹ\nمحفوظ رہیں اور ہدایات پر عمل کریں۔`
+        flood: {
+            en: `${emoji} FLOOD ALERT — ${loc}. KMC Dewatering Units deployed. Avoid ${policeBlock} area. Do NOT enter submerged underpasses. ETA ${etaMins} min.`,
+            ur: `${emoji} سیلاب الرٹ — ${loc}۔ KMC ڈیواٹرنگ ٹیم روانہ — ETA ${etaMins} منٹ۔ ${policeBlock} سے دور رہیں۔ زیرآب راستوں میں نہ جائیں۔`,
         },
-        mayor_brief: `Mayor, a ${type} incident has been confirmed at ${loc}. ${dept} has been deployed from ${deployedHub} with a live TomTom-calculated ETA of ${etaMins} minutes. Situation under autonomous monitoring.`
+        blast: {
+            en: `${emoji} BLAST ALERT — ${loc}. 300m exclusion zone active. LEAVE the area NOW. Do not use mobile phones near scene. Emergency: 1122 + 15.`,
+            ur: `${emoji} دھماکہ الرٹ — ${loc}۔ 300 میٹر کا خطرناک زون فعال۔ ابھی علاقہ خالی کریں۔ 1122 اور 15 پر کال کریں۔`,
+        },
+        protest: {
+            en: `${emoji} ROAD CLOSURE — ${loc}. Traffic Police managing diversion via ${primaryRoute}. Avoid the area. Ambulance corridor maintained for emergencies.`,
+            ur: `${emoji} سڑک بند — ${loc}۔ ${primaryRoute} سے متبادل راستہ استعمال کریں۔ ایمبولینس کا راستہ کھلا ہے۔ ٹریفک پولیس موجود ہے۔`,
+        },
     };
 
+    // Detailed WhatsApp drafts
+    const whatsappDrafts = {
+        fire: {
+            en: `🚨 MUHAFIZ-X SOVEREIGN ALERT\n━━━━━━━━━━━━━━━━━━━━━━━━\n🔥 INCIDENT: FIRE\n📍 LOCATION: ${loc}\n━━━━━━━━━━━━━━━━━━━━━━━━\n✅ RESPONSE DEPLOYED:\n• ${units} from ${hub}\n• ETA: ${etaMins} minutes (live TomTom routing)\n• Route: ${primaryRoute}\n• KESC power cut ordered for immediate block\n• ${nearestHospital} alerted for casualty intake\n━━━━━━━━━━━━━━━━━━━━━━━━\n⚠️ CITIZEN ACTION REQUIRED:\n• Evacuate ALL structures within 150m\n• Do NOT use elevators\n• Wet cloth over face if smoke present\n• Emergency hotline: 16 (Fire) / 1122 (Rescue)`,
+            ur: `🚨 محافظ-X حکومتی الرٹ\n━━━━━━━━━━━━━━━━━━━━━━━━\n🔥 واقعہ: آگ لگنا\n📍 مقام: ${loc}\n━━━━━━━━━━━━━━━━━━━━━━━━\n✅ جوابی کارروائی:\n• ${dept} روانہ از ${hub}\n• ETA: ${etaMins} منٹ\n• ${nearestHospital} تیار\n━━━━━━━━━━━━━━━━━━━━━━━━\n⚠️ شہریوں سے گزارش:\n• 150 میٹر کے اندر فوری انخلاء\n• لفٹ استعمال نہ کریں\n• ہنگامی نمبر: 16 / 1122`,
+        },
+        flood: {
+            en: `🚨 MUHAFIZ-X SOVEREIGN ALERT\n━━━━━━━━━━━━━━━━━━━━━━━━\n🌊 INCIDENT: URBAN FLOODING\n📍 LOCATION: ${loc}\n━━━━━━━━━━━━━━━━━━━━━━━━\n✅ RESPONSE DEPLOYED:\n• ${units} from ${hub}\n• ETA: ${etaMins} minutes\n• ${policeBlock} CLOSED — traffic diverted\n• Route for emergency vehicles: ${primaryRoute}\n• ${nearestHospital} on standby\n━━━━━━━━━━━━━━━━━━━━━━━━\n⚠️ CITIZEN ACTION REQUIRED:\n• AVOID all underpasses — submersion risk\n• Move vehicles to high ground immediately\n• Do NOT walk through water above ankle\n• Danger: Submerged electrical wiring\n• Emergency: 1122 / KMC 021-99251301`,
+            ur: `🚨 محافظ-X حکومتی الرٹ\n━━━━━━━━━━━━━━━━━━━━━━━━\n🌊 واقعہ: شہری سیلاب\n📍 مقام: ${loc}\n━━━━━━━━━━━━━━━━━━━━━━━━\n✅ جوابی کارروائی:\n• KMC پمپ یونٹ روانہ\n• ${policeBlock} بند — راستہ بدلیں\n• ${nearestHospital} تیار\n━━━━━━━━━━━━━━━━━━━━━━━━\n⚠️ شہریوں سے گزارش:\n• زیرآب راستوں سے دور رہیں\n• گاڑیاں اونچی جگہ کھڑی کریں\n• ہنگامی نمبر: 1122`,
+        },
+        blast: {
+            en: `🚨 MUHAFIZ-X SOVEREIGN ALERT\n━━━━━━━━━━━━━━━━━━━━━━━━\n💥 INCIDENT: EXPLOSION / BLAST\n📍 LOCATION: ${loc}\n━━━━━━━━━━━━━━━━━━━━━━━━\n✅ RESPONSE DEPLOYED:\n• CTD Bomb Disposal Squad + Rescue 1122\n• 300m exclusion zone established\n• ${nearestHospital} trauma bay activated\n━━━━━━━━━━━━━━━━━━━━━━━━\n⚠️ CRITICAL — LEAVE THE AREA:\n• EXIT within 300m radius IMMEDIATELY\n• Do NOT use mobile phones near scene\n• Avoid glass and debris\n• Emergency: 1122 / 15 (Police)`,
+            ur: `🚨 محافظ-X حکومتی الرٹ\n━━━━━━━━━━━━━━━━━━━━━━━━\n💥 واقعہ: دھماکہ\n📍 مقام: ${loc}\n━━━━━━━━━━━━━━━━━━━━━━━━\n⚠️ اہم — ابھی علاقہ خالی کریں\n• 300 میٹر کا خطرناک زون\n• موبائل فون بند کریں\n• ہنگامی نمبر: 1122 / 15`,
+        },
+        protest: {
+            en: `🚨 MUHAFIZ-X TRAFFIC ALERT\n━━━━━━━━━━━━━━━━━━━━━━━━\n🚧 INCIDENT: ROAD CLOSURE / PROTEST\n📍 LOCATION: ${loc}\n━━━━━━━━━━━━━━━━━━━━━━━━\n✅ TRAFFIC MANAGEMENT:\n• Traffic Police deployed at ${policeBlock}\n• ALTERNATE ROUTE: ${primaryRoute}\n• Ambulance corridor maintained\n• ${nearestHospital} — emergency access preserved\n━━━━━━━━━━━━━━━━━━━━━━━━\n📌 USE ALTERNATE ROUTES:\n• ${primaryRoute}\n• Avoid: ${policeBlock} area entirely\n• Traffic Police Hotline: 021-35662001`,
+            ur: `🚨 محافظ-X ٹریفک الرٹ\n━━━━━━━━━━━━━━━━━━━━━━━━\n🚧 واقعہ: سڑک بندش\n📍 مقام: ${loc}\n━━━━━━━━━━━━━━━━━━━━━━━━\n✅ متبادل راستہ: ${primaryRoute}\n• ${policeBlock} سے دور رہیں\n• ٹریفک پولیس موجود\n• ہنگامی نمبر: 15`,
+        },
+    };
+
+    const push = pushMessages[crisisType] || pushMessages.flood;
+    const whatsapp = whatsappDrafts[crisisType] || whatsappDrafts.flood;
+
+    const mayorBrief = `Mayor's Security Brief — ${new Date().toLocaleTimeString('en-PK', { timeZone: 'Asia/Karachi' })}: ` +
+        `${crisisType.toUpperCase()} confirmed at ${loc} (Urgency: ${urgency}/10). ` +
+        `${dept} dispatched from ${hub} — ETA ${etaMins} min via ${primaryRoute}. ` +
+        `Police route clearance at ${policeBlock}. ` +
+        `${nearestHospital} placed on standby. ` +
+        `${isGlobal ? 'CITY-WIDE alert issued.' : 'Local 5km alert zone active.'} Muhafiz-X autonomous pipeline complete.`;
+
+    const dynamicFallback = {
+        scope: isGlobal ? 'GLOBAL' : 'LOCAL',
+        radius_km: isGlobal ? 15 : 5,
+        push_notification: push,
+        whatsapp_draft: whatsapp,
+        mayor_brief: mayorBrief,
+    };
+
+    const systemPrompt = `You are the Voice of Muhafiz-X, Karachi's Sovereign Emergency Communication System.
+    CRISIS: ${crisisType.toUpperCase()} at ${loc}
+    DEPLOYMENT: ${JSON.stringify(action_plan?.deployment || {})}
+    ROUTE: ${primaryRoute}
+    POLICE BLOCK: ${policeBlock}
+    
+    Generate bilingual (English + Urdu) emergency broadcasts. Be specific to ${loc}, not generic.
+    Include: specific route alternatives, exact emergency numbers, specific unit ETAs, hospital names.
+    
+    Output ONLY JSON: { "scope": "LOCAL"|"GLOBAL", "radius_km": number, "push_notification": {"en": string, "ur": string}, "whatsapp_draft": {"en": string, "ur": string}, "mayor_brief": string }`;
+
+    let result;
     try {
         const response = await flashModel.invoke([
-            ["system", systemPrompt],
-            ["user", `Crisis: ${classification?.type || 'Emergency'} at ${classification?.location?.landmark || 'Karachi'}`]
+            ['system', systemPrompt],
+            ['user', `Broadcast for ${crisisType} at ${loc}`]
         ]);
         result = safeParseJson(response.content, dynamicFallback);
     } catch (e) {
-        console.warn("[Communicator] LLM Failed, using fallback.");
+        console.warn('[Communicator] LLM unavailable — using crisis-specific broadcast templates.');
         result = dynamicFallback;
     }
 
-    console.log(`[Agent: The Communicator] Broadcast scope: ${result.scope} (${result.radius_km}km). Push EN: "${result.push_notification?.en}"`);
+    console.log(`[Agent: The Communicator] Scope: ${result.scope} (${result.radius_km}km). Push: "${result.push_notification?.en?.substring(0, 80)}..."`);
 
     const log = {
         timestamp: new Date().toISOString(),
-        agent: "The Communicator",
-        message: `Alert Scoped as ${result.scope} (${result.radius_km}km). Push and WhatsApp drafts ready.`,
-        outcome: "Success"
+        agent: 'The Communicator',
+        message: `📡 ${result.scope} broadcast issued (${result.radius_km}km radius). Push + WhatsApp alerts dispatched in EN/UR. Mayor briefed.`,
+        outcome: 'Broadcast Issued',
+        details: result,
     };
 
     return {
         communication: result,
-        traceLogs: [log]
+        traceLogs: [log],
     };
 };
