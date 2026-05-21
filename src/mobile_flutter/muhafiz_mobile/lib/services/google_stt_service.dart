@@ -5,10 +5,10 @@ import 'package:http/http.dart' as http;
 
 class GoogleSttService {
   // Injected at build time via: flutter run --dart-define=GOOGLE_STT_KEY=<value>
-  // Falls back to GOOGLE_API_KEY if dedicated STT key not set
+  // Falls back to GOOGLE_STT_KEY if dedicated STT key not set
   static const String _apiKey = String.fromEnvironment(
     'GOOGLE_STT_KEY',
-    defaultValue:'AIzaSyDTwgei_fdUEdE3B1PXD5vZqdXef5J2HrM'//String.fromEnvironment('GOOGLE_API_KEY'),
+    defaultValue: 'AIzaSyDTwgei_fdUEdE3B1PXD5vZqdXef5J2HrM',
   );
   static const String _sttEndpoint =
       'https://speech.googleapis.com/v1/speech:recognize';
@@ -20,7 +20,7 @@ class GoogleSttService {
   static Future<SttResult> transcribe(String filePath) async {
     if (_apiKey.isEmpty) {
       throw SttException(
-        'GOOGLE_API_KEY not set. Run with: flutter run --dart-define=GOOGLE_API_KEY=<your_key>',
+        'GOOGLE_STT_KEY not set. Run with: flutter run --dart-define=GOOGLE_STT_KEY=<your_key>',
       );
     }
     final bytes = await File(filePath).readAsBytes();
