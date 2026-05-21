@@ -5,15 +5,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/feedback_widgets.dart';
 
 class ApiService {
-  // --- HOST CONFIGURATION ---
-  // For iOS Simulator: '127.0.0.1'
-  // For Physical iPhone on same WiFi: use Mac's LAN IP (run `ipconfig getifaddr en0`)
-  // For Android Emulator: '10.0.2.2'
-  static const String _macLanIp = '192.168.18.4';
-  static final String _host = Platform.isAndroid ? '10.0.2.2' : _macLanIp;
-  static final String _baseUrl = 'http://$_host:3001/api';
+  static const String _baseUrl = 'https://muhafiz-backend-latest.onrender.com/api';
 
-  static String get wsUrl => 'ws://$_host:3001';
+  static String get wsUrl => 'wss://muhafiz-backend-latest.onrender.com';
 
   static Future<Map<String, dynamic>> post(
     String path,

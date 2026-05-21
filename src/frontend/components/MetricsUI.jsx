@@ -1,5 +1,6 @@
 import React from 'react';
 import { Shield, Activity, Users, Truck, Heart, Menu } from 'lucide-react';
+import { API_BASE } from '../utils/config.js';
 
 const MetricsUI = ({ activeCrises, deptStats, livesSaved, toggleSidebar, activeDept, departments }) => {
     const currentDept = departments[activeDept] || { name: 'Unknown Unit', color: 'text-zinc-500' };
@@ -8,7 +9,7 @@ const MetricsUI = ({ activeCrises, deptStats, livesSaved, toggleSidebar, activeD
     React.useEffect(() => {
         const fetchVitals = async () => {
             try {
-                const res = await fetch('http://127.0.0.1:3001/api/city-vitals');
+                const res = await fetch(`${API_BASE}/api/city-vitals`);
                 const data = await res.json();
                 setVitals(data);
             } catch (e) { console.error(e); }

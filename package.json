@@ -6,8 +6,10 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "vite",
+    "build": "vite build",
     "server": "node src/backend/server.js",
-    "connect": "concurrently \"npm run dev\" \"npm run server\""
+    "connect": "concurrently \"npm run dev\" \"npm run server\"",
+    "deploy": "npm run build && ./node_modules/.bin/firebase deploy --only hosting"
   },
   "repository": {
     "type": "git",
@@ -40,6 +42,7 @@
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
     "express": "^5.2.1",
+    "firebase-tools": "^15.18.0",
     "google-auth-library": "^10.6.2",
     "jsonwebtoken": "^9.0.3",
     "lucide-react": "^1.16.0",

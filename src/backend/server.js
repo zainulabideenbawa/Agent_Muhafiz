@@ -15,7 +15,7 @@ app.use(router);
 const server = http.createServer(app);
 initWebSocket(server);
 
-const PORT = 3001;
+const PORT = process.env.PORT || 3009;
 server.listen(PORT, async () => {
     await initDb();
     startIncidentWorker();

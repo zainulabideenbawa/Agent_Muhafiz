@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Shield, Fingerprint, Lock, ChevronRight, Cpu, User } from 'lucide-react';
 import { setToken } from '../utils/auth';
+import { API_BASE } from '../utils/config.js';
 
 const SovereignLogin = ({ onLogin }) => {
     const [email, setEmail] = useState('');
@@ -14,7 +15,7 @@ const SovereignLogin = ({ onLogin }) => {
         setError(null);
         
         try {
-            const res = await fetch('http://127.0.0.1:3001/api/login', {
+            const res = await fetch(`${API_BASE}/api/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password })

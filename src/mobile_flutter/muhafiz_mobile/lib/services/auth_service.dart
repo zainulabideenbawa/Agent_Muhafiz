@@ -1,14 +1,8 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:http/http.dart' as http;
 
 class AuthService {
-  // 10.0.2.2 is the special alias for localhost in Android Emulators
-  // For physical iPhone, use Mac's LAN IP (same as ApiService)
-  static const String _macLanIp = '192.168.18.4';
-  static final String baseUrl = Platform.isAndroid
-      ? 'http://10.0.2.2:3001/api'
-      : 'http://$_macLanIp:3001/api';
+  static const String baseUrl = 'https://muhafiz-backend-latest.onrender.com/api';
 
   static Future<Map<String, dynamic>> signup({
     required String nic,

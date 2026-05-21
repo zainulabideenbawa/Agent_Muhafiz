@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Wind, Thermometer, Droplets, Activity } from 'lucide-react';
+import { API_BASE } from '../utils/config.js';
 
 const CityVitals = () => {
     const [vitals, setVitals] = useState(null);
@@ -7,7 +8,7 @@ const CityVitals = () => {
     useEffect(() => {
         const fetchVitals = async () => {
             try {
-                const res = await fetch('http://127.0.0.1:3001/api/city-vitals');
+                const res = await fetch(`${API_BASE}/api/city-vitals`);
                 const data = await res.json();
                 setVitals(data);
             } catch (e) { console.error(e); }

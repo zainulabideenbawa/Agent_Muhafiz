@@ -1,5 +1,6 @@
 import React from 'react';
 import { AlertCircle, X, Shield, Globe, Copy, Check, Terminal, Cpu, Users, Eye, Zap } from 'lucide-react';
+import { API_BASE } from '../utils/config.js';
 
 const CrisisAlert = ({ message, onClose }) => {
     const [copied, setCopied] = React.useState(false);
@@ -14,7 +15,7 @@ const CrisisAlert = ({ message, onClose }) => {
         }
         setIsSyncing(true);
         try {
-            await fetch('http://127.0.0.1:3001/api/incidents/accept-quest', {
+            await fetch(`${API_BASE}/api/incidents/accept-quest`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ incidentId: message.incidentId })

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, Truck, Users, LayoutDashboard, Settings, User, Save, Plus, MapPin, Trash2, Terminal, Send, TrendingUp, Megaphone, ClipboardList, Cpu, Search, ChevronRight, LogOut } from 'lucide-react';
+import { API_BASE } from '../utils/config.js';
 
 const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, setDashboardView, user, sidebarOpen, setSidebarOpen, selectedIncident, setSelectedIncident, onLogout, incidents, triggerSimulation }) => {
     const [hubs, setHubs] = useState([]);
@@ -13,13 +14,13 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
             let endpoint = '';
             let body = {};
             if (actionType === 'CONFIRM') {
-                endpoint = 'http://127.0.0.1:3001/api/incidents/confirm-crisis';
+                endpoint = `${API_BASE}/api/incidents/confirm-crisis`;
                 body = { incidentId: selectedIncident.id, note: 'Crisis officially confirmed by Sovereign Command.' };
             } else if (actionType === 'ACCEPT_QUEST') {
-                endpoint = 'http://127.0.0.1:3001/api/incidents/accept-quest';
+                endpoint = `${API_BASE}/api/incidents/accept-quest`;
                 body = { incidentId: selectedIncident.id };
             } else {
-                endpoint = 'http://127.0.0.1:3001/api/incidents/retract-alert';
+                endpoint = `${API_BASE}/api/incidents/retract-alert`;
                 body = { incidentId: selectedIncident.id, reason: actionType === 'FALSE_ALARM' ? 'False Alarm' : 'Road Clear' };
             }
 
@@ -63,7 +64,7 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
     useEffect(() => {
         const fetchHealth = async () => {
             try {
-                const res = await fetch('http://127.0.0.1:3001/api/health');
+                const res = await fetch(`${API_BASE}/api/health`);
                 const data = await res.json();
                 setHealth(data);
             } catch (e) { console.error("Health fetch failed", e); }
@@ -90,7 +91,7 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
 
     const fetchHubs = async () => {
         try {
-            const res = await fetch(`http://127.0.0.1:3001/api/department-resources/${activeDept}`);
+            const res = await fetch(`${API_BASE}/api/department-resources/${activeDept}`);
             const data = await res.json();
             const hubList = Array.isArray(data) ? data : (data.hubs || []);
 
@@ -105,7 +106,7 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
     const handleSave = async () => {
         setIsSaving(true);
         try {
-            await fetch(`http://127.0.0.1:3001/api/department-resources/${activeDept}`, {
+            await fetch(`${API_BASE}/api/department-resources/${activeDept}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(hubs)
@@ -813,7 +814,7 @@ const SovereignSidebar = ({ activeDept, setDept, view, setView, dashboardView, s
                                     const directive = input.value;
                                     if (!directive) return;
                                     try {
-                                        await fetch('http://127.0.0.1:3001/api/agent-directive', {
+                                        await fetch(`${API_BASE}/api/agent-directive`, {
                                             method: 'POST',
                                             headers: { 'Content-Type': 'application/json' },
                                             body: JSON.stringify({ directive })

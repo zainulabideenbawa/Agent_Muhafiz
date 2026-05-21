@@ -3,10 +3,8 @@ import 'package:muhafiz_mobile/services/auth_service.dart';
 
 void main() {
   group('AuthService API Endpoint Structure Tests', () {
-    test('Base URL is constructed correctly based on platform', () {
-      // The exact base URL depends on the running platform environment,
-      // but should be a valid HTTP url endpoint on port 3001.
-      expect(AuthService.baseUrl, contains(':3001/api'));
+    test('Base URL points to the production Render deployment', () {
+      expect(AuthService.baseUrl, equals('https://muhafiz-backend-latest.onrender.com/api'));
     });
   });
 }

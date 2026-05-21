@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Shield, Plus, Lock, MapPin, Mail, ChevronRight } from 'lucide-react';
+import { API_BASE } from '../utils/config.js';
 
 const UserManagement = () => {
     const [activeTab, setActiveTab] = useState('OFFICERS');
@@ -26,7 +27,7 @@ const UserManagement = () => {
         setLoading(true);
         try {
             const endpoint = activeTab === 'OFFICERS' ? '/api/admin/officers' : '/api/admin/citizens';
-            const res = await fetch(`http://127.0.0.1:3001${endpoint}`, {
+            const res = await fetch(`${API_BASE}${endpoint}`, {
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('muhafiz_user') ? JSON.parse(localStorage.getItem('muhafiz_user')).token : ''}`
                 }
@@ -46,7 +47,7 @@ const UserManagement = () => {
     const handleCreateOfficer = async (e) => {
         e.preventDefault();
         try {
-            const res = await fetch('http://127.0.0.1:3001/api/admin/officers', {
+            const res = await fetch(`${API_BASE}/api/admin/officers`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

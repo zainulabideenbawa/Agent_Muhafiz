@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { TrendingUp, Award, Clock, Star, MapPin, CheckCircle, Activity } from 'lucide-react';
+import { API_BASE } from '../utils/config.js';
 
 const SovereignAnalytics = ({ activeDept, departments }) => {
     const [stats, setStats] = useState(null);
@@ -7,7 +8,7 @@ const SovereignAnalytics = ({ activeDept, departments }) => {
     useEffect(() => {
         const fetchStats = async () => {
             try {
-                const res = await fetch(`http://127.0.0.1:3001/api/performance/${activeDept}`);
+                const res = await fetch(`${API_BASE}/api/performance/${activeDept}`);
                 const data = await res.json();
                 setStats(data);
             } catch (e) { console.error(e); }

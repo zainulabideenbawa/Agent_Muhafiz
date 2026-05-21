@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE, WS_BASE } from './utils/config.js';
 import { Menu, X, Shield, Globe } from 'lucide-react';
 import AgentTraceTerminal from './components/AgentTraceTerminal';
 import DigitalTwinMap from './components/DigitalTwinMap';
@@ -54,7 +55,7 @@ function App() {
 
   const handleLogout = async () => {
     try {
-      await fetch('http://127.0.0.1:3001/api/logout', { method: 'POST' });
+      await fetch(`${API_BASE}/api/logout`, { method: 'POST' });
     } catch (e) {
       console.error("Logout request failed:", e);
     }
@@ -91,7 +92,7 @@ function App() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const res = await fetch(`http://127.0.0.1:3001/api/department-resources/${activeDept}`);
+        const res = await fetch(`${API_BASE}/api/department-resources/${activeDept}`);
         const hubs = await res.json();
         if (Array.isArray(hubs)) {
           const totals = hubs.reduce((acc, h) => ({
@@ -109,7 +110,7 @@ function App() {
   useEffect(() => {
     const fetchIncidentsAndTraces = async () => {
       try {
-        const res = await fetch('http://127.0.0.1:3001/api/incidents');
+        const res = await fetch(`${API_BASE}/api/incidents`);
         const dbIncidents = await res.json();
         if (Array.isArray(dbIncidents)) {
           const mappedIncidents = dbIncidents.map(inc => {
@@ -174,7 +175,7 @@ function App() {
   useEffect(() => { activeDeptRef.current = activeDept; }, [activeDept]);
 
   useEffect(() => {
-    const websocket = new WebSocket('ws://127.0.0.1:3001');
+    const websocket = new WebSocket(`${WS_BASE}`);
     websocket.onmessage = (event) => {
       const data = JSON.parse(event.data);
       window.dispatchEvent(new CustomEvent('sovereign_websocket_message', { detail: data }));
@@ -348,7 +349,7 @@ function App() {
     }
     setIsSimulating(true);
     try {
-      await fetch('http://127.0.0.1:3001/api/incidents/trigger-crisis', {
+      await fetch(`${API_BASE}/api/incidents/trigger-crisis`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ input })

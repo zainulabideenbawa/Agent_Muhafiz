@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Trophy, Target, Zap, AlertTriangle, MapPin, TrendingUp, ShieldAlert, Cpu, Settings, User } from 'lucide-react';
+import { API_BASE } from '../utils/config.js';
 
 const SovereignIntelligence = () => {
     const [intel, setIntel] = useState(null);
 
     useEffect(() => {
         const fetchIntel = async () => {
-            const res = await fetch('http://127.0.0.1:3001/api/sovereign-intelligence');
+            const res = await fetch(`${API_BASE}/api/sovereign-intelligence`);
             const data = await res.json();
             setIntel(data);
         };
@@ -147,7 +148,7 @@ const SovereignIntelligence = () => {
                                 <button 
                                     onClick={async () => {
                                         try {
-                                            await fetch('http://127.0.0.1:3001/api/execute/deploy-hub', {
+                                            await fetch(`${API_BASE}/api/execute/deploy-hub`, {
                                                 method: 'POST',
                                                 headers: { 'Content-Type': 'application/json' },
                                                 body: JSON.stringify({ sector: gap.sector, dept: 'RESCUE_1122' })
@@ -187,7 +188,7 @@ const SovereignIntelligence = () => {
                                 <button 
                                     onClick={async () => {
                                         try {
-                                            await fetch('http://127.0.0.1:3001/api/execute/dispatch-maintenance', {
+                                            await fetch(`${API_BASE}/api/execute/dispatch-maintenance`, {
                                                 method: 'POST',
                                                 headers: { 'Content-Type': 'application/json' },
                                                 body: JSON.stringify({ sector: 'NIPA Intersection', logic: 'Critical Blockage' })

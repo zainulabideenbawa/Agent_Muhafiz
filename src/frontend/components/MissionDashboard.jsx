@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ClipboardList, CheckCircle, Clock, AlertCircle, User, Shield, ChevronRight } from 'lucide-react';
+import { API_BASE } from '../utils/config.js';
 
 const MissionDashboard = () => {
     const [tasks, setTasks] = useState([]);
@@ -13,7 +14,7 @@ const MissionDashboard = () => {
 
     const fetchTasks = async () => {
         try {
-            const res = await fetch('http://127.0.0.1:3001/api/tasks');
+            const res = await fetch(`${API_BASE}/api/tasks`);
             const data = await res.json();
             setTasks(data.length > 0 ? data : [
                 { task_id: 'TSK-101', incident_ref: 'INC-001', status: 'ON_SCENE', assigned_agent: 'The Dispatcher', mission_objective: 'Contain secondary fire at Saddar Bazaar', priority_level: 2 },
@@ -112,7 +113,7 @@ const MissionDashboard = () => {
                             <button 
                                 onClick={async () => {
                                     try {
-                                        await fetch(`http://127.0.0.1:3001/api/tasks/${task.task_id}/status`, {
+                                        await fetch(`${API_BASE}/api/tasks/${task.task_id}/status`, {
                                             method: 'POST',
                                             headers: { 'Content-Type': 'application/json' },
                                             body: JSON.stringify({ status: 'RESOLVED', summary: 'Manual Sovereign Resolution' })
