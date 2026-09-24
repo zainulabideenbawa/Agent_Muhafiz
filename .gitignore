@@ -10,3 +10,8 @@ yarn-error.log
 .env.local
 .env
 xenon-lyceum-495513-e6-708a9ff3fc14.json
+node_modules/
+**/node_modules/
+build/
+.next/
+.cxx/
