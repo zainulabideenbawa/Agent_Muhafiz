@@ -157,7 +157,7 @@ export const get_gps_from_google_maps = async (landmark) => {
     }
 
     // Secondary: Google Maps (if key is set)
-    const apiKey = process.env.GOOGLE_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY;
     if (apiKey) {
         try {
             const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(landmark + ", Karachi")}&key=${apiKey}`;

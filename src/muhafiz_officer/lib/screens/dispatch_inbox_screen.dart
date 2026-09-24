@@ -698,24 +698,19 @@ class _DispatchInboxScreenState extends State<DispatchInboxScreen>
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: color.withValues(alpha: 0.35)),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
                   padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                   decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(3),
+                    color: color.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
                     status,
                     style: TextStyle(
-                        color: color,
-                        fontSize: 8,
-                        fontFamily: 'monospace',
-                        fontWeight: FontWeight.bold),
+                      color: color,
+                      fontSize: 8,
+                      fontFamily: 'monospace',
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
                 const Spacer(),

@@ -77,3 +77,11 @@ module.exports = {
     },
   },
 }
+```
+
+## 5. Mobile App Design Expectations
+To align with the Muhafiz-X vision, all mobile applications (Citizen App and Field Officer App) must adhere strictly to the following aesthetic rules:
+* **Premium Dark Mode First:** The interface must feel highly sophisticated. Do not use generic colors; rely exclusively on the defined tactical dark palettes with harmonious gradients.
+* **Glassmorphism:** Use transluscent, frosted-glass effects (blur) on modal overlays and floating UI elements to give a modern, depth-focused look.
+* **Micro-animations:** Incorporate subtle loading states, pulse effects for active signals, and smooth transitions between screens to create a dynamic and alive user experience.
+* **Absence of Placeholders:** All UI components should use realistic data, icons, or agent-generated mockups to demonstrate a complete, production-ready polish.

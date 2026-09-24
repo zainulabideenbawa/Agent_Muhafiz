@@ -57,9 +57,9 @@ async function invokeDualEngine(models, messages, options = {}) {
     }
 
     // 2. Fall back to AI Studio (API Key)
-    const apiKey = process.env.GOOGLE_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-        console.error("[Models/AIStudio] Fallback failed: GOOGLE_API_KEY is not defined.");
+        console.error("[Models/AIStudio] Fallback failed: GEMINI_API_KEY is not defined.");
         updateApiHealth('llm_gateway', false, Date.now() - start);
         throw lastError || new Error("No credentials available");
     }
